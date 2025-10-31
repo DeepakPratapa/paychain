@@ -1,0 +1,241 @@
+# Docker Compose v2 compatible configuration
+# No version field needed for Docker Compose v2.x+
+
+services:
+  # ============================================
+  # FRONTEND
+  # ============================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: paychain-frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - api-gateway
+    networks:
+      - frontend-net
+    environment:
+      - VITE_API_URL=http://localhost:8000
+      - VITE_WS_URL=ws://localhost:8080
+    restart: unless-stopped
+
+  # ============================================
+  # NGINX REVERSE PROXY
+  # ============================================
+  nginx:
+    image: nginx:alpine
+    container_name: paychain-nginx
+    ports:
+      - "8000:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - user-service
+      - job-service
+      - payment-service
+      - websocket-server
+    networks:
+      - frontend-net
+      - backend-net
+    restart: unless-stopped
+
+  # ============================================
+  # API GATEWAY
+  # ============================================
+  api-gateway:
+    build:
+      context: ./backend
+      dockerfile: api_gateway/Dockerfile
+    container_name: paychain-api-gateway
+    ports:
+      - "8001:8000"
+    depends_on:
+      - user-service
+      - job-service
+      - payment-service
+    networks:
+      - backend-net
+    environment:
+      - USER_SERVICE_URL=http://user-service:8000
+      - JOB_SERVICE_URL=http://job-service:8000
+      - PAYMENT_SERVICE_URL=http://payment-service:8000
+    restart: unless-stopped
+
+  # ============================================
+  # USER SERVICE
+  # ============================================
+  user-service:
+    build:
+      context: ./backend
+      dockerfile: user_service/Dockerfile
+    container_name: paychain-user-service
+    ports:
+      - "8002:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - backend-net
+      - database-net
+    env_file:
+      - .env
+    restart: unless-stopped
+
+  # ============================================
+  # JOB SERVICE
+  # ============================================
+  job-service:
+    build:
+      context: ./backend
+      dockerfile: job_service/Dockerfile
+    container_name: paychain-job-service
+    ports:
+      - "8003:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      payment-service:
+        condition: service_started
+      websocket-server:
+        condition: service_started
+    networks:
+      - backend-net
+      - database-net
+    env_file:
+      - .env
+    environment:
+      - USER_SERVICE_URL=http://user-service:8000
+      - PAYMENT_SERVICE_URL=http://payment-service:8000
+      - WEBSOCKET_SERVER_URL=http://websocket-server:8000
+    restart: unless-stopped
+
+  # ============================================
+  # PAYMENT SERVICE
+  # ============================================
+  payment-service:
+    build:
+      context: ./backend
+      dockerfile: payment_service/Dockerfile
+    container_name: paychain-payment-service
+    ports:
+      - "8004:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ganache:
+        condition: service_started
+    networks:
+      - backend-net
+      - database-net
+      - blockchain-net
+    env_file:
+      - .env
+    environment:
+      - BLOCKCHAIN_URL=http://ganache:8545
+    volumes:
+      - ./blockchain/artifacts/contracts/PayChainEscrow.sol:/app/PayChainEscrow.json:ro
+    restart: unless-stopped
+
+  # ============================================
+  # WEBSOCKET SERVER
+  # ============================================
+  websocket-server:
+    build:
+      context: ./backend
+      dockerfile: websocket_server/Dockerfile
+    container_name: paychain-websocket
+    ports:
+      - "8080:8000"
+    networks:
+      - backend-net
+    env_file:
+      - .env
+    restart: unless-stopped
+
+  # ============================================
+  # POSTGRESQL DATABASE
+  # ============================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: paychain-postgres
+    ports:
+      - "5432:5432"
+    networks:
+      - database-net
+    environment:
+      - POSTGRES_DB=paychain_db
+      - POSTGRES_USER=paychain_user
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - ./database/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U paychain_user -d paychain_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ============================================
+  # REDIS CACHE
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: paychain-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - backend-net
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+
+  # ============================================
+  # GANACHE BLOCKCHAIN
+  # ============================================
+  ganache:
+    image: trufflesuite/ganache:latest
+    container_name: paychain-ganache
+    ports:
+      - "8545:8545"
+    networks:
+      - blockchain-net
+    command:
+      - --wallet.mnemonic
+      - "test test test test test test test test test test test junk"
+      - --wallet.totalAccounts
+      - "10"
+      - --wallet.defaultBalance
+      - "1000"
+      - --chain.networkId
+      - "1337"
+      - --chain.chainId
+      - "1337"
+    restart: unless-stopped
+
+# ============================================
+# NETWORKS
+# ============================================
+networks:
+  frontend-net:
+    driver: bridge
+  backend-net:
+    driver: bridge
+  database-net:
+    driver: bridge
+    internal: true
+  blockchain-net:
+    driver: bridge
+
+# ============================================
+# VOLUMES
+# ============================================
+volumes:
+  postgres-data:
+  redis-data:
