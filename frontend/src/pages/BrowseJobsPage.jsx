@@ -33,39 +33,47 @@ const BrowseJobsPage = () => {
   ]
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Browse Jobs</h1>
-          <p className="text-gray-600 mt-1">
-            Find available jobs and start earning
+        <div className="mb-10 text-center">
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-primary-600 to-purple-600 bg-clip-text text-transparent mb-3">
+            Browse Available Jobs
+          </h1>
+          <p className="text-lg text-gray-600">
+            Find your next opportunity and start earning 💼
           </p>
         </div>
 
         {/* Filters */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+        <div className="bg-white rounded-2xl shadow-lg p-8 mb-8 border border-gray-100 hover:shadow-xl transition-shadow">
           <div className="flex flex-col md:flex-row gap-4">
             {/* Search */}
             <div className="flex-1">
+              <label className="block text-sm font-semibold text-gray-800 mb-3">
+                🔍 Search Jobs
+              </label>
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
                 <input
                   type="text"
-                  placeholder="Search jobs..."
+                  placeholder="Search by title, description, category..."
                   value={filters.search}
                   onChange={handleSearchChange}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  className="w-full pl-12 pr-5 py-3.5 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-gray-50 text-gray-900 placeholder-gray-400 transition-all"
                 />
               </div>
             </div>
 
             {/* Sort Dropdown */}
-            <div className="flex items-center space-x-2">
+            <div className="md:w-64">
+              <label className="block text-sm font-semibold text-gray-800 mb-3">
+                📊 Sort By
+              </label>
               <select
                 value={filters.sort_by}
                 onChange={(e) => handleSortChange(e.target.value)}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="w-full px-5 py-3.5 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-gray-50 text-gray-900 transition-all font-medium"
               >
                 {sortOptions.map(option => (
                   <option key={option.value} value={option.value}>
@@ -79,9 +87,9 @@ const BrowseJobsPage = () => {
 
         {/* Results Count */}
         {Array.isArray(jobs) && !isLoading && (
-          <div className="mb-4">
-            <p className="text-gray-600">
-              Found <span className="font-semibold">{jobs.length}</span> jobs
+          <div className="mb-6 bg-gradient-to-r from-primary-50 to-purple-50 rounded-xl p-4 border border-primary-100">
+            <p className="text-gray-700 font-medium text-center">
+              ✨ Found <span className="font-bold text-primary-600">{jobs.length}</span> available job{jobs.length !== 1 ? 's' : ''}
             </p>
           </div>
         )}
@@ -90,7 +98,7 @@ const BrowseJobsPage = () => {
         <JobList
           jobs={jobs}
           loading={isLoading}
-          emptyMessage="No jobs found matching your filters"
+          emptyMessage="No jobs found matching your filters. Try adjusting your search criteria."
         />
       </div>
     </div>
