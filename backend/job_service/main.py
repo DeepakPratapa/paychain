@@ -18,6 +18,7 @@ from shared.schemas import (
     PaymentStatus,
     ChecklistUpdateRequest,
     JobUpdate,
+    PaginatedJobsResponse,
 )
 from shared.auth import decode_token
 from models import Job
@@ -127,6 +128,139 @@ async def enrich_job_with_usernames(job: Job) -> JobResponse:
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "service": "job-service"}
+
+
+@app.get("/jobs/expired", response_model=List[JobResponse])
+async def get_expired_jobs(
+    user: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session)
+):
+    """Get expired jobs that need refunds (admin/platform use)"""
+    try:
+        current_time = datetime.utcnow()
+        
+        # Find jobs that are in_progress and past their deadline
+        query = select(Job).where(
+            and_(
+                Job.status == JobStatus.IN_PROGRESS.value,
+                Job.deadline < current_time,
+                Job.payment_status == PaymentStatus.LOCKED.value
+            )
+        )
+        
+        result = await session.execute(query)
+        expired_jobs = result.scalars().all()
+        
+        enriched_jobs = []
+        for job in expired_jobs:
+            enriched = await enrich_job_with_usernames(job)
+            enriched_jobs.append(enriched)
+        
+        return enriched_jobs
+        
+    except Exception as e:
+        logger.error(f"Get expired jobs failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve expired jobs"
+        )
+
+
+@app.post("/jobs/{job_id}/refund", response_model=JobResponse)
+async def refund_expired_job(
+    job_id: int,
+    user: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session)
+):
+    """Refund an expired job (employer can request, or automatic)"""
+    try:
+        result = await session.execute(select(Job).where(Job.id == job_id))
+        job = result.scalar_one_or_none()
+        
+        if not job:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+        
+        # Allow employer or platform admin to refund
+        if job.employer_id != int(user.get("sub")):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to refund this job"
+            )
+        
+        # Check if job is expired and in progress
+        if job.status != JobStatus.IN_PROGRESS.value:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Only in-progress jobs can be refunded"
+            )
+        
+        if not job.deadline or job.deadline > datetime.utcnow():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Job has not expired yet"
+            )
+        
+        if job.payment_status != PaymentStatus.LOCKED.value:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Job payment is not locked in escrow"
+            )
+        
+        # Call Payment Service to refund
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{settings.PAYMENT_SERVICE_URL}/escrow/refund",
+                    json={"job_id": job.id},
+                    headers={"X-Service-API-Key": settings.PAYMENT_SERVICE_API_KEY},
+                    timeout=30.0
+                )
+                
+                if response.status_code == 200:
+                    job.status = JobStatus.CANCELLED.value
+                    job.payment_status = PaymentStatus.REFUNDED.value
+                    await session.commit()
+                    
+                    logger.info(f"Job {job_id} refunded due to expiration")
+                    
+                    # Broadcast
+                    try:
+                        async with httpx.AsyncClient() as client:
+                            await client.post(
+                                f"{settings.WS_SERVICE_URL}/broadcast",
+                                json={
+                                    "type": "job_refunded",
+                                    "data": {"job_id": job.id, "reason": "expired"}
+                                },
+                                timeout=5.0
+                            )
+                    except Exception as e:
+                        logger.warning(f"WebSocket broadcast failed: {e}")
+                    
+                    await session.refresh(job)
+                else:
+                    raise HTTPException(
+                        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                        detail="Failed to process refund"
+                    )
+        except httpx.RequestError as e:
+            logger.error(f"Payment service error: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Payment service unavailable"
+            )
+        
+        return await enrich_job_with_usernames(job)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Refund job failed: {e}")
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to refund job"
+        )
 
 
 @app.post("/jobs", response_model=JobResponse, status_code=status.HTTP_201_CREATED)
@@ -337,7 +471,7 @@ async def delete_job(
         )
 
 
-@app.get("/jobs", response_model=List[JobResponse])
+@app.get("/jobs", response_model=PaginatedJobsResponse)
 async def list_jobs(
     status_filter: Optional[str] = None,
     job_type: Optional[str] = None,
@@ -349,9 +483,11 @@ async def list_jobs(
     limit: int = 20,
     session: AsyncSession = Depends(get_db_session)
 ):
-    """List jobs with filters and sorting"""
+    """List jobs with filters, sorting, and pagination metadata"""
     try:
+        # Build base query for filtering
         query = select(Job)
+        count_query = select(func.count(Job.id))
         
         conditions = []
         if status_filter:
@@ -372,6 +508,11 @@ async def list_jobs(
         
         if conditions:
             query = query.where(and_(*conditions))
+            count_query = count_query.where(and_(*conditions))
+        
+        # Get total count
+        total_result = await session.execute(count_query)
+        total = total_result.scalar()
         
         # Apply sorting
         if sort_by == "pay_high":
@@ -385,6 +526,7 @@ async def list_jobs(
         else:  # Default to newest
             query = query.order_by(Job.created_at.desc())
         
+        # Apply pagination
         query = query.offset(skip).limit(limit)
         
         result = await session.execute(query)
@@ -396,7 +538,16 @@ async def list_jobs(
             enriched = await enrich_job_with_usernames(job)
             enriched_jobs.append(enriched)
         
-        return enriched_jobs
+        # Calculate total pages
+        pages = (total + limit - 1) // limit if limit > 0 else 0
+        
+        return PaginatedJobsResponse(
+            jobs=enriched_jobs,
+            total=total,
+            skip=skip,
+            limit=limit,
+            pages=pages
+        )
         
     except Exception as e:
         logger.error(f"List jobs failed: {e}")

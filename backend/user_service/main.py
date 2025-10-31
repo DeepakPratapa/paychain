@@ -294,6 +294,102 @@ async def get_current_user(
         )
 
 
+@app.post("/auth/refresh", response_model=TokenResponse)
+async def refresh_access_token(
+    request: RefreshRequest,
+    session: AsyncSession = Depends(get_db_session)
+):
+    """Refresh access token using refresh token"""
+    try:
+        # Decode refresh token
+        payload = decode_token(request.refresh_token, settings.JWT_SECRET_KEY)
+        
+        if not payload or payload.get("type") != "refresh":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid refresh token"
+            )
+        
+        user_id = int(payload.get("sub"))
+        
+        # Get user
+        result = await session.execute(
+            select(User).where(User.id == user_id)
+        )
+        user = result.scalar_one_or_none()
+        
+        if not user or not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found or inactive"
+            )
+        
+        # Generate new access token
+        access_token = create_access_token(
+            data={"sub": str(user.id), "wallet": user.wallet_address, "user_type": user.user_type},
+            secret_key=settings.JWT_SECRET_KEY,
+            expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        )
+        
+        # Optionally generate new refresh token for rotation
+        refresh_token = create_refresh_token(
+            data={"sub": str(user.id)},
+            secret_key=settings.JWT_SECRET_KEY,
+            expires_delta=timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+        )
+        
+        return TokenResponse(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            token_type="bearer",
+            expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            user=UserResponse.from_orm(user)
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Token refresh failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token refresh failed"
+        )
+
+
+@app.post("/auth/logout")
+async def logout(
+    authorization: str = Header(...),
+    session: AsyncSession = Depends(get_db_session)
+):
+    """Logout user (invalidate session)"""
+    try:
+        # Extract token
+        token = authorization.replace("Bearer ", "")
+        payload = decode_token(token, settings.JWT_SECRET_KEY)
+        
+        if not payload:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token"
+            )
+        
+        # In a production system, you would:
+        # 1. Add token to a blacklist in Redis with TTL = token expiry
+        # 2. Or invalidate all user sessions
+        # For now, we just confirm the logout
+        
+        return {"message": "Logged out successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Logout failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Logout failed"
+        )
+
+
 @app.get("/users/{user_id}", response_model=UserResponse)
 async def get_user(
     user_id: int,

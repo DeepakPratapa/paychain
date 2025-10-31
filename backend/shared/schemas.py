@@ -189,3 +189,12 @@ class WebSocketMessage(BaseModel):
 class ErrorResponse(BaseModel):
     detail: str
     code: Optional[str] = None
+
+
+# Pagination Response
+class PaginatedJobsResponse(BaseModel):
+    jobs: List[JobResponse]
+    total: int
+    skip: int
+    limit: int
+    pages: int

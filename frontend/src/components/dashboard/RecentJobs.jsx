@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Clock, DollarSign, User, CheckCircle, AlertCircle } from 'lucide-react'
+import CurrencyDisplay from '../common/CurrencyDisplay'
 
 const RecentJobs = ({ jobs, title, emptyMessage, isEmployer }) => {
   const getStatusBadge = (status) => {
@@ -45,7 +46,11 @@ const RecentJobs = ({ jobs, title, emptyMessage, isEmployer }) => {
               <div className="flex flex-wrap gap-4 text-sm text-gray-600">
                 <div className="flex items-center space-x-2">
                   <DollarSign size={16} className="text-green-600" />
-                  <span className="font-semibold">${job.pay_amount_usd}</span>
+                  <CurrencyDisplay 
+                    amountUsd={job.pay_amount_usd}
+                    amountEth={job.pay_amount_eth}
+                    className="font-semibold"
+                  />
                 </div>
                 <div className="flex items-center space-x-2">
                   <Clock size={16} className="text-blue-600" />

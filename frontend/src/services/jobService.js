@@ -14,6 +14,8 @@ export const jobService = {
     }
 
     const response = await api.get('/jobs', { params })
+    // Return the full response with pagination metadata
+    // Backend now returns: { jobs: [], total: 0, skip: 0, limit: 20, pages: 0 }
     return response.data
   },
 
@@ -52,5 +54,15 @@ export const jobService = {
 
   async deleteJob(jobId) {
     await api.delete(`/jobs/${jobId}`)
+  },
+
+  async getExpiredJobs() {
+    const response = await api.get('/jobs/expired')
+    return response.data
+  },
+
+  async refundJob(jobId) {
+    const response = await api.post(`/jobs/${jobId}/refund`)
+    return response.data
   },
 }

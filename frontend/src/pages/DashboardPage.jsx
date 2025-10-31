@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { jobService } from '../services/jobService'
 import { useAuth } from '../contexts/AuthContext'
 import JobList from '../components/job/JobList'
+import PlatformStats from '../components/dashboard/PlatformStats'
 import { Link } from 'react-router-dom'
 import { PlusCircle, Briefcase, Clock, CheckCircle } from 'lucide-react'
 
@@ -122,27 +123,36 @@ const DashboardPage = () => {
         </div>
 
         {/* Jobs Section */}
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-bold text-gray-900">
-              {isEmployer ? 'My Posted Jobs' : 'My Accepted Jobs'}
-            </h2>
-            {!isEmployer && (
-              <Link to="/browse" className="text-primary-600 hover:text-primary-700 font-medium">
-                Browse All Jobs →
-              </Link>
-            )}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-bold text-gray-900">
+                  {isEmployer ? 'My Posted Jobs' : 'My Accepted Jobs'}
+                </h2>
+                {!isEmployer && (
+                  <Link to="/browse" className="text-primary-600 hover:text-primary-700 font-medium">
+                    Browse All Jobs →
+                  </Link>
+                )}
+              </div>
+              
+              <JobList
+                jobs={myJobs}
+                loading={myJobsLoading}
+                emptyMessage={
+                  isEmployer 
+                    ? "You haven't posted any jobs yet. Create your first job to get started!"
+                    : "You haven't accepted any jobs yet. Browse available jobs to get started!"
+                }
+              />
+            </div>
           </div>
-          
-          <JobList
-            jobs={myJobs}
-            loading={myJobsLoading}
-            emptyMessage={
-              isEmployer 
-                ? "You haven't posted any jobs yet. Create your first job to get started!"
-                : "You haven't accepted any jobs yet. Browse available jobs to get started!"
-            }
-          />
+
+          {/* Platform Stats Sidebar */}
+          <div className="lg:col-span-1">
+            <PlatformStats />
+          </div>
         </div>
       </div>
     </div>

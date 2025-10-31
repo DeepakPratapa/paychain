@@ -27,11 +27,22 @@ const HomePage = () => {
   })
 
   // Fetch open jobs for workers
-  const { data: openJobs } = useQuery({
+  const { data: openJobsResponse } = useQuery({
     queryKey: ['open-jobs'],
     queryFn: () => jobService.getJobs({ status: 'open', sort_by: 'pay_high' }),
     enabled: isAuthenticated && user?.user_type === 'worker',
   })
+
+  // Fetch all open jobs for platform stats (for employers)
+  const { data: allOpenJobsResponse } = useQuery({
+    queryKey: ['all-open-jobs'],
+    queryFn: () => jobService.getJobs({ status: 'open' }),
+    enabled: isAuthenticated && user?.user_type === 'employer',
+  })
+
+  // Extract jobs arrays from paginated responses
+  const openJobs = openJobsResponse?.jobs || openJobsResponse
+  const allOpenJobs = allOpenJobsResponse?.jobs || allOpenJobsResponse
 
   const handleGetStarted = async () => {
     const address = await connectWallet()
@@ -71,6 +82,7 @@ const HomePage = () => {
     totalJobs: myJobs.length,
     activeJobs: myJobs.filter(j => j.status === 'in_progress').length,
     completedJobs: myJobs.filter(j => j.status === 'completed').length,
+    openJobs: myJobs.filter(j => j.status === 'open').length,
     totalEarned: myJobs
       .filter(j => j.status === 'completed' && user?.user_type === 'worker')
       .reduce((sum, j) => sum + parseFloat(j.pay_amount_usd || 0), 0),
@@ -105,9 +117,9 @@ const HomePage = () => {
               color="blue"
             />
             <StatsCard
-              icon={Zap}
-              label="Active Jobs"
-              value={stats?.activeJobs || 0}
+              icon={Search}
+              label="Open Jobs"
+              value={stats?.openJobs || 0}
               color="yellow"
             />
             <StatsCard
@@ -161,17 +173,15 @@ const HomePage = () => {
                 <h3 className="text-xl font-bold text-gray-900 mb-4">💼 Platform Activity</h3>
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
-                    <span className="text-gray-600">Total Open Jobs</span>
+                    <span className="text-gray-600">Total Platform Jobs</span>
                     <span className="text-2xl font-bold text-green-600">
-                      {openJobs?.length || 0}
+                      {allOpenJobs?.length || 0}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-gray-600">Your Success Rate</span>
+                    <span className="text-gray-600">Your Active Jobs</span>
                     <span className="text-2xl font-bold text-blue-600">
-                      {stats?.completedJobs > 0
-                        ? Math.round((stats.completedJobs / stats.totalJobs) * 100)
-                        : 0}%
+                      {stats?.activeJobs || 0}
                     </span>
                   </div>
                 </div>

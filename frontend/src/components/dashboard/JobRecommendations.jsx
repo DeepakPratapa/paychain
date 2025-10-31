@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { DollarSign, Clock, Sparkles, TrendingUp } from 'lucide-react'
+import CurrencyDisplay from '../common/CurrencyDisplay'
 
 const JobRecommendations = ({ jobs }) => {
   if (!jobs || jobs.length === 0) {
@@ -44,7 +45,10 @@ const JobRecommendations = ({ jobs }) => {
             <div className="flex gap-4 text-sm">
               <div className="flex items-center space-x-1 text-green-700 font-bold">
                 <DollarSign size={16} />
-                <span>${job.pay_amount_usd}</span>
+                <CurrencyDisplay 
+                  amountUsd={job.pay_amount_usd}
+                  amountEth={job.pay_amount_eth}
+                />
               </div>
               <div className="flex items-center space-x-1 text-blue-700 font-medium">
                 <Clock size={16} />

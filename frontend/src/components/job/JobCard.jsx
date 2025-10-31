@@ -1,5 +1,6 @@
 import { Clock, DollarSign, User, CheckCircle } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import CurrencyDisplay from '../common/CurrencyDisplay'
 
 const JobCard = ({ job }) => {
   const statusColors = {
@@ -48,7 +49,11 @@ const JobCard = ({ job }) => {
         <div className="space-y-2 border-t pt-4">
           <div className="flex items-center text-sm text-gray-700">
             <DollarSign size={16} className="mr-2 text-gray-400" />
-            <span className="font-semibold text-primary-600">{formatPrice(job.pay_amount_usd)}</span>
+            <CurrencyDisplay 
+              amountUsd={job.pay_amount_usd} 
+              amountEth={job.pay_amount_eth}
+              className="text-primary-600"
+            />
           </div>
 
           <div className="flex items-center text-sm text-gray-600">

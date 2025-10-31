@@ -2,14 +2,18 @@ import { Link, useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { jobService } from '../services/jobService'
 import { useAuth } from '../contexts/AuthContext'
+import { useWebSocket } from '../contexts/WebSocketContext'
+import { useEffect } from 'react'
 import { Clock, DollarSign, User, CheckCircle, AlertCircle, Pencil, Trash2, ClipboardList } from 'lucide-react'
 import toast from 'react-hot-toast'
+import CurrencyDisplay from '../components/common/CurrencyDisplay'
 
 const JobDetailsPage = () => {
   const { id } = useParams()
   const navigate = useNavigate()
   const { user } = useAuth()
   const queryClient = useQueryClient()
+  const { isConnected, subscribe, unsubscribe, on } = useWebSocket()
 
   const { data: job, isLoading } = useQuery({
     queryKey: ['job', id],
@@ -17,6 +21,60 @@ const JobDetailsPage = () => {
     staleTime: 5000, // Consider data fresh for 5 seconds
     refetchOnWindowFocus: false, // Don't refetch when window regains focus
   })
+
+  // WebSocket real-time updates
+  useEffect(() => {
+    if (!isConnected || !id) return
+
+    // Subscribe to job-specific channel
+    subscribe(`job:${id}`)
+
+    // Handle job updates
+    const unsubscribeJobUpdate = on('job_updated', (data) => {
+      if (data.job_id === parseInt(id)) {
+        console.log('🔄 Job updated via WebSocket:', data)
+        queryClient.invalidateQueries(['job', id])
+        toast.success('Job updated!', { icon: '🔄' })
+      }
+    })
+
+    // Handle job status changes
+    const unsubscribeStatusChange = on('job_status_changed', (data) => {
+      if (data.job_id === parseInt(id)) {
+        console.log('📊 Job status changed:', data.new_status)
+        queryClient.invalidateQueries(['job', id])
+        queryClient.invalidateQueries(['my-jobs'])
+        
+        const statusMessages = {
+          accepted: 'Job has been accepted by a worker',
+          in_progress: 'Work is now in progress',
+          completed: 'Job has been completed!',
+          cancelled: 'Job has been cancelled',
+        }
+        
+        if (statusMessages[data.new_status]) {
+          toast.success(statusMessages[data.new_status], { icon: '📊' })
+        }
+      }
+    })
+
+    // Handle payment confirmations
+    const unsubscribePayment = on('payment_confirmed', (data) => {
+      if (data.job_id === parseInt(id)) {
+        console.log('💰 Payment confirmed:', data)
+        queryClient.invalidateQueries(['job', id])
+        toast.success('Payment confirmed on blockchain!', { icon: '💰' })
+      }
+    })
+
+    // Cleanup
+    return () => {
+      unsubscribe(`job:${id}`)
+      unsubscribeJobUpdate()
+      unsubscribeStatusChange()
+      unsubscribePayment()
+    }
+  }, [isConnected, id, subscribe, unsubscribe, on, queryClient])
 
   const acceptMutation = useMutation({
     mutationFn: () => jobService.acceptJob(id),
@@ -195,9 +253,12 @@ const JobDetailsPage = () => {
               </span>
             </div>
             <div className="text-right">
-              <p className="text-3xl font-bold text-primary-600">{formatPrice(job.pay_amount_usd)}</p>
-              <p className="text-xs text-gray-400 mt-1">{formatEth(job.pay_amount_eth)}</p>
-              <p className="text-sm text-gray-500">Payment</p>
+              <CurrencyDisplay 
+                amountUsd={job.pay_amount_usd}
+                amountEth={job.pay_amount_eth}
+                className="text-3xl text-primary-600"
+              />
+              <p className="text-sm text-gray-500 mt-2">Payment</p>
             </div>
           </div>
 

@@ -27,9 +27,17 @@ export const authService = {
     return response.data
   },
 
-  logout() {
-    localStorage.removeItem('access_token')
-    localStorage.removeItem('refresh_token')
-    localStorage.removeItem('user')
+  async logout() {
+    try {
+      // Call backend logout endpoint
+      await api.post('/auth/logout')
+    } catch (error) {
+      console.error('Logout API call failed:', error)
+    } finally {
+      // Always clear local storage regardless of API call result
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('refresh_token')
+      localStorage.removeItem('user')
+    }
   },
 }

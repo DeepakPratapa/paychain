@@ -11,10 +11,15 @@ const BrowseJobsPage = () => {
     sort_by: 'newest',
   })
 
-  const { data: jobs, isLoading } = useQuery({
+  const { data: jobsResponse, isLoading } = useQuery({
     queryKey: ['jobs', filters],
     queryFn: () => jobService.getJobs(filters),
   })
+
+  // Extract jobs array and metadata from paginated response
+  const jobs = jobsResponse?.jobs || jobsResponse
+  const total = jobsResponse?.total || (Array.isArray(jobs) ? jobs.length : 0)
+  const pages = jobsResponse?.pages || 0
 
   const handleSearchChange = (e) => {
     setFilters(prev => ({ ...prev, search: e.target.value }))
@@ -86,10 +91,11 @@ const BrowseJobsPage = () => {
         </div>
 
         {/* Results Count */}
-        {Array.isArray(jobs) && !isLoading && (
+        {!isLoading && total > 0 && (
           <div className="mb-6 bg-gradient-to-r from-primary-50 to-purple-50 rounded-xl p-4 border border-primary-100">
             <p className="text-gray-700 font-medium text-center">
-              ✨ Found <span className="font-bold text-primary-600">{jobs.length}</span> available job{jobs.length !== 1 ? 's' : ''}
+              ✨ Found <span className="font-bold text-primary-600">{total}</span> available job{total !== 1 ? 's' : ''}
+              {pages > 1 && <span className="text-gray-600"> ({pages} page{pages !== 1 ? 's' : ''})</span>}
             </p>
           </div>
         )}

@@ -147,6 +147,20 @@ async def balance_proxy(request: Request, wallet_address: str):
     return await proxy_request(request, target_url)
 
 
+@app.api_route("/payment/balance/{wallet_address}", methods=["GET"])
+async def payment_balance_proxy(request: Request, wallet_address: str):
+    """Alternative route for balance (for frontend compatibility)"""
+    target_url = f"{PAYMENT_SERVICE_URL}/balance/{wallet_address}"
+    return await proxy_request(request, target_url)
+
+
+@app.api_route("/payment/escrow/{path:path}", methods=["GET", "POST"])
+async def payment_escrow_proxy(request: Request, path: str):
+    """Alternative route for escrow operations (for frontend compatibility)"""
+    target_url = f"{PAYMENT_SERVICE_URL}/escrow/{path}"
+    return await proxy_request(request, target_url)
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useWallet } from '../../contexts/WalletContext'
 import { Wallet, LogOut, Home, Briefcase, PlusCircle } from 'lucide-react'
 import RegistrationModal from '../auth/RegistrationModal'
+import WalletBalance from '../wallet/WalletBalance'
 import toast from 'react-hot-toast'
 
 const Navbar = () => {
@@ -106,17 +107,22 @@ const Navbar = () => {
           {/* Wallet & User Info */}
           <div className="flex items-center space-x-4">
             {isAuthenticated && user && (
-              <div className="flex items-center space-x-2">
-                <div className="text-right">
-                  <div className="text-sm font-medium text-gray-900">{user.username}</div>
-                  <div className="text-xs text-gray-500 capitalize">{user.user_type}</div>
-                </div>
-                {isConnected && account && (
-                  <div className="px-3 py-1 bg-green-100 text-green-700 rounded-lg text-sm font-mono">
-                    {formatAddress(account)}
+              <>
+                {/* Wallet Balance */}
+                <WalletBalance />
+                
+                <div className="flex items-center space-x-2">
+                  <div className="text-right">
+                    <div className="text-sm font-medium text-gray-900">{user.username}</div>
+                    <div className="text-xs text-gray-500 capitalize">{user.user_type}</div>
                   </div>
-                )}
-              </div>
+                  {isConnected && account && (
+                    <div className="px-3 py-1 bg-green-100 text-green-700 rounded-lg text-sm font-mono">
+                      {formatAddress(account)}
+                    </div>
+                  )}
+                </div>
+              </>
             )}
 
             {!isAuthenticated && (
