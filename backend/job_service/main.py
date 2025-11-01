@@ -20,7 +20,7 @@ from shared.schemas import (
     JobUpdate,
     PaginatedJobsResponse,
 )
-from shared.auth import decode_token
+from shared.auth_guard import get_current_user, require_employer, require_worker, get_current_user_optional
 from models import Job
 
 logging.basicConfig(level=logging.INFO)
@@ -56,16 +56,7 @@ async def get_db_session():
         yield session
 
 
-async def get_current_user(authorization: str = Header(...)):
-    """Extract user info from JWT token"""
-    try:
-        token = authorization.replace("Bearer ", "")
-        payload = decode_token(token, settings.JWT_SECRET_KEY)
-        if not payload:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
-        return payload
-    except Exception:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication failed")
+# Note: get_current_user, require_employer, require_worker now imported from shared.auth_guard
 
 
 async def enrich_job_with_usernames(job: Job) -> JobResponse:
@@ -481,9 +472,10 @@ async def list_jobs(
     sort_by: Optional[str] = None,
     skip: int = 0,
     limit: int = 20,
+    user: Optional[dict] = Depends(get_current_user_optional),
     session: AsyncSession = Depends(get_db_session)
 ):
-    """List jobs with filters, sorting, and pagination metadata"""
+    """List jobs with filters, sorting, and pagination metadata (optional auth)"""
     try:
         # Build base query for filtering
         query = select(Job)
@@ -595,9 +587,10 @@ async def get_my_jobs(
 @app.get("/jobs/{job_id}", response_model=JobResponse)
 async def get_job(
     job_id: int,
+    user: Optional[dict] = Depends(get_current_user_optional),
     session: AsyncSession = Depends(get_db_session)
 ):
-    """Get job details"""
+    """Get job details (optional auth - some details only visible to authenticated users)"""
     result = await session.execute(select(Job).where(Job.id == job_id))
     job = result.scalar_one_or_none()
     

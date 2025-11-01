@@ -9,6 +9,7 @@ import logging
 
 from shared.config import get_settings
 from shared.database import get_database
+from shared.auth_guard import get_current_user
 from blockchain_client import BlockchainClient
 
 logging.basicConfig(level=logging.INFO)
@@ -217,9 +218,23 @@ async def refund_job(
 
 
 @app.get("/balance/{wallet_address}")
-async def get_balance(wallet_address: str):
-    """Get wallet balance"""
+async def get_balance(
+    wallet_address: str,
+    user: dict = Depends(get_current_user)
+):
+    """Get wallet balance (authenticated - user must own the wallet)"""
     try:
+        # Verify user owns this wallet
+        user_wallet = user.get("wallet", "").lower()
+        requested_wallet = wallet_address.lower()
+        
+        if user_wallet != requested_wallet:
+            logger.warning(f"User {user.get('sub')} attempted to access wallet {wallet_address}")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied. You can only view your own wallet balance"
+            )
+        
         balance_eth = blockchain.get_balance(wallet_address)
         # Mock USD conversion (1 ETH = ~$4100)
         balance_usd = balance_eth * 4100
@@ -230,6 +245,8 @@ async def get_balance(wallet_address: str):
             "balance_usd": str(round(balance_usd, 2))
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Get balance failed: {e}")
         raise HTTPException(

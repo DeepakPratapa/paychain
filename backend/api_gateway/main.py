@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 import httpx
 import os
 import logging
@@ -24,6 +25,69 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+class AuthMiddleware(BaseHTTPMiddleware):
+    """
+    Centralized authentication middleware for API Gateway.
+    Validates JWT tokens for protected routes.
+    """
+    
+    # Routes that don't require authentication
+    PUBLIC_ROUTES = [
+        "/health",
+        "/auth/challenge",
+        "/auth/verify",
+        "/auth/refresh",
+    ]
+    
+    # Routes that require authentication (will return 401 if no valid token)
+    PROTECTED_ROUTES = [
+        "/jobs/my-jobs",
+        "/jobs/expired",
+        "/payment/balance",
+        "/balance",
+        "/escrow",
+        "/payment/escrow",
+    ]
+    
+    async def dispatch(self, request: Request, call_next):
+        path = request.url.path
+        
+        # Allow OPTIONS requests (CORS preflight)
+        if request.method == "OPTIONS":
+            return await call_next(request)
+        
+        # Allow public routes
+        if any(path.startswith(route) for route in self.PUBLIC_ROUTES):
+            return await call_next(request)
+        
+        # Check if route requires authentication
+        requires_auth = any(path.startswith(route) for route in self.PROTECTED_ROUTES)
+        
+        if requires_auth:
+            auth_header = request.headers.get("Authorization")
+            
+            if not auth_header or not auth_header.startswith("Bearer "):
+                return JSONResponse(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    content={"detail": "Not authenticated"},
+                    headers={
+                        "WWW-Authenticate": "Bearer",
+                        "Access-Control-Allow-Origin": "*",
+                        "Access-Control-Allow-Credentials": "true"
+                    }
+                )
+            
+            # Token validation is done at the service level
+            # Gateway just checks presence and format
+        
+        response = await call_next(request)
+        return response
+
+
+# Add auth middleware
+app.add_middleware(AuthMiddleware)
 
 
 @app.on_event("startup")

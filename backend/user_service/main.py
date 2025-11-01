@@ -18,6 +18,7 @@ from shared.schemas import (
     UserCreate, UserResponse
 )
 from shared.auth import create_access_token, create_refresh_token, decode_token
+from shared.auth_guard import get_current_user
 from models import User, Session
 
 # Setup logging
@@ -252,45 +253,35 @@ async def signup(
 
 
 @app.get("/users/me", response_model=UserResponse)
-async def get_current_user(
-    authorization: str = Header(...),
+async def get_me(
+    user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session)
 ):
     """Get current authenticated user"""
     try:
-        # Extract token
-        token = authorization.replace("Bearer ", "")
-        payload = decode_token(token, settings.JWT_SECRET_KEY)
+        user_id = int(user.get("sub"))
         
-        if not payload:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token"
-            )
-        
-        user_id = int(payload.get("sub"))
-        
-        # Get user
+        # Get user from database
         result = await session.execute(
             select(User).where(User.id == user_id)
         )
-        user = result.scalar_one_or_none()
+        db_user = result.scalar_one_or_none()
         
-        if not user:
+        if not db_user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="User not found"
             )
         
-        return UserResponse.from_orm(user)
+        return UserResponse.from_orm(db_user)
         
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Get current user failed: {e}")
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication failed"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve user information"
         )
 
 
