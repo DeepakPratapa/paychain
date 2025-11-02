@@ -256,3 +256,6 @@ Then open http://localhost:3000 and enjoy your blockchain escrow platform!
 **Questions? Check QUICKSTART.md for detailed troubleshooting.**
 
 **Happy coding! 🚀**
+
+
+
