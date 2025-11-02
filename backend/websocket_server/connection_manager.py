@@ -9,19 +9,32 @@ class ConnectionManager:
     def __init__(self):
         # Active connections: {connection_id: WebSocket}
         self.active_connections: Dict[str, WebSocket] = {}
+        # User mapping: {user_id: connection_id}
+        self.user_connections: Dict[int, str] = {}
         # Subscriptions: {channel: set of connection_ids}
         self.subscriptions: Dict[str, Set[str]] = {}
     
-    async def connect(self, websocket: WebSocket, connection_id: str):
+    async def connect(self, websocket: WebSocket, connection_id: str, user_id: int = None):
         """Accept new WebSocket connection"""
         await websocket.accept()
         self.active_connections[connection_id] = websocket
-        logger.info(f"✅ WebSocket connected: {connection_id}")
+        if user_id:
+            self.user_connections[user_id] = connection_id
+        logger.info(f"✅ WebSocket connected: {connection_id}" + (f" (user {user_id})" if user_id else ""))
     
     def disconnect(self, connection_id: str):
         """Remove WebSocket connection"""
         if connection_id in self.active_connections:
             del self.active_connections[connection_id]
+        
+        # Remove from user mapping
+        user_id_to_remove = None
+        for user_id, conn_id in self.user_connections.items():
+            if conn_id == connection_id:
+                user_id_to_remove = user_id
+                break
+        if user_id_to_remove:
+            del self.user_connections[user_id_to_remove]
         
         # Remove from all subscriptions
         for channel in self.subscriptions:
@@ -34,8 +47,12 @@ class ConnectionManager:
         for channel in channels:
             if channel not in self.subscriptions:
                 self.subscriptions[channel] = set()
-            self.subscriptions[channel].add(connection_id)
-            logger.info(f"📡 {connection_id} subscribed to {channel}")
+            
+            # Only log if this is a new subscription
+            if connection_id not in self.subscriptions[channel]:
+                self.subscriptions[channel].add(connection_id)
+                logger.info(f"📡 {connection_id} subscribed to {channel}")
+            # else: Already subscribed, silently ignore
     
     def unsubscribe(self, connection_id: str, channels: list):
         """Unsubscribe connection from channels"""
@@ -86,6 +103,14 @@ class ConnectionManager:
         # Clean up disconnected clients
         for connection_id in disconnected:
             self.disconnect(connection_id)
+    
+    async def send_to_user(self, message: dict, user_id: int):
+        """Send message to a specific user by user ID"""
+        if user_id in self.user_connections:
+            connection_id = self.user_connections[user_id]
+            await self.send_personal_message(message, connection_id)
+        else:
+            logger.warning(f"User {user_id} not connected")
     
     def get_stats(self) -> dict:
         """Get connection statistics"""

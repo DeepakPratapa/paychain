@@ -1,13 +1,15 @@
 import { useQuery } from '@tanstack/react-query'
 import { jobService } from '../services/jobService'
 import { useAuth } from '../contexts/AuthContext'
+import { useWebSocket } from '../contexts/WebSocketContext'
 import JobList from '../components/job/JobList'
 import PlatformStats from '../components/dashboard/PlatformStats'
 import { Link } from 'react-router-dom'
-import { PlusCircle, Briefcase, Clock, CheckCircle } from 'lucide-react'
+import { PlusCircle, Briefcase, Clock, CheckCircle, Wifi, WifiOff } from 'lucide-react'
 
 const DashboardPage = () => {
   const { user } = useAuth()
+  const { isConnected } = useWebSocket()
 
   const { data: myJobs, isLoading: myJobsLoading } = useQuery({
     queryKey: ['my-jobs'],
@@ -49,8 +51,22 @@ const DashboardPage = () => {
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-            <p className="text-gray-600 mt-1">
+            <p className="text-gray-600 mt-1 flex items-center gap-2">
               Welcome back, {user?.username}!
+              {/* WebSocket Connection Indicator */}
+              <span className="inline-flex items-center gap-1 text-xs">
+                {isConnected ? (
+                  <>
+                    <Wifi size={14} className="text-green-600" />
+                    <span className="text-green-600">Live updates active</span>
+                  </>
+                ) : (
+                  <>
+                    <WifiOff size={14} className="text-gray-400" />
+                    <span className="text-gray-400">Offline</span>
+                  </>
+                )}
+              </span>
             </p>
           </div>
           {isEmployer && (

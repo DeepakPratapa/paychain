@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import config from '../config'
+import { useAuth } from './AuthContext'
 
 const WebSocketContext = createContext(null)
 
@@ -14,12 +15,15 @@ export const useWebSocket = () => {
 export const WebSocketProvider = ({ children }) => {
   const [isConnected, setIsConnected] = useState(false)
   const [lastMessage, setLastMessage] = useState(null)
+  const { user } = useAuth()
   const wsRef = useRef(null)
   const reconnectTimeoutRef = useRef(null)
   const reconnectAttempts = useRef(0)
   const maxReconnectAttempts = 5
   const subscribedChannels = useRef(new Set())
   const messageHandlers = useRef(new Map())
+  const isCleaningUpRef = useRef(false)
+  const authenticatedRef = useRef(false)
 
   // WebSocket URL (remove http:// or https:// and replace with ws://)
   const getWebSocketUrl = () => {
@@ -32,9 +36,20 @@ export const WebSocketProvider = ({ children }) => {
       const ws = new WebSocket(getWebSocketUrl())
 
       ws.onopen = () => {
-        console.log('✅ WebSocket connected')
         setIsConnected(true)
         reconnectAttempts.current = 0
+        authenticatedRef.current = false
+
+        // Authenticate with user ID if logged in
+        if (user?.id) {
+          ws.send(
+            JSON.stringify({
+              type: 'authenticate',
+              user_id: user.id,
+            })
+          )
+          authenticatedRef.current = true
+        }
 
         // Resubscribe to channels after reconnection
         if (subscribedChannels.current.size > 0) {
@@ -50,7 +65,6 @@ export const WebSocketProvider = ({ children }) => {
       ws.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data)
-          console.log('📨 WebSocket message:', message)
           setLastMessage(message)
 
           // Call registered handlers for this message type
@@ -69,26 +83,28 @@ export const WebSocketProvider = ({ children }) => {
         }
       }
 
-      ws.onerror = (error) => {
-        console.error('❌ WebSocket error:', error)
+      ws.onerror = () => {
+        // Silently ignore WebSocket errors during cleanup (React.StrictMode)
+        // Real connection errors will be handled by reconnect logic
       }
 
       ws.onclose = () => {
-        console.log('🔌 WebSocket disconnected')
         setIsConnected(false)
         wsRef.current = null
+
+        // Don't reconnect if we're cleaning up (component unmounting)
+        if (isCleaningUpRef.current) {
+          return
+        }
 
         // Attempt to reconnect
         if (reconnectAttempts.current < maxReconnectAttempts) {
           const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000)
-          console.log(`🔄 Reconnecting in ${delay}ms... (Attempt ${reconnectAttempts.current + 1}/${maxReconnectAttempts})`)
           
           reconnectTimeoutRef.current = setTimeout(() => {
             reconnectAttempts.current++
             connect()
           }, delay)
-        } else {
-          console.error('❌ Max reconnection attempts reached')
         }
       }
 
@@ -112,13 +128,20 @@ export const WebSocketProvider = ({ children }) => {
   const subscribe = (channels) => {
     const channelArray = Array.isArray(channels) ? channels : [channels]
     
-    channelArray.forEach((channel) => subscribedChannels.current.add(channel))
+    // Only add new channels that aren't already subscribed
+    const newChannels = channelArray.filter(channel => !subscribedChannels.current.has(channel))
+    
+    if (newChannels.length === 0) {
+      return // Already subscribed to all requested channels
+    }
+    
+    newChannels.forEach((channel) => subscribedChannels.current.add(channel))
 
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(
         JSON.stringify({
           type: 'subscribe',
-          channels: channelArray,
+          channels: newChannels,
         })
       )
     }
@@ -143,13 +166,24 @@ export const WebSocketProvider = ({ children }) => {
     if (!messageHandlers.current.has(messageType)) {
       messageHandlers.current.set(messageType, new Set())
     }
-    messageHandlers.current.get(messageType).add(handler)
+    
+    const handlers = messageHandlers.current.get(messageType)
+    
+    // Check if this exact handler is already registered
+    if (handlers.has(handler)) {
+      console.warn(`Handler for '${messageType}' already registered, skipping duplicate`)
+      return () => {} // Return no-op unsubscribe
+    }
+    
+    handlers.add(handler)
+    console.log(`✅ Registered handler for '${messageType}', total: ${handlers.size}`)
 
     // Return unsubscribe function
     return () => {
       const handlers = messageHandlers.current.get(messageType)
       if (handlers) {
         handlers.delete(handler)
+        console.log(`🗑️ Unregistered handler for '${messageType}', remaining: ${handlers.size}`)
         if (handlers.size === 0) {
           messageHandlers.current.delete(messageType)
         }
@@ -165,14 +199,16 @@ export const WebSocketProvider = ({ children }) => {
     }
   }
 
-  // Connect on mount
+  // Connect on mount and when user changes
   useEffect(() => {
+    isCleaningUpRef.current = false
     connect()
 
     return () => {
+      isCleaningUpRef.current = true
       disconnect()
     }
-  }, [])
+  }, [user?.id]) // Reconnect when user changes
 
   // Ping to keep connection alive
   useEffect(() => {

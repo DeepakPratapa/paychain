@@ -56,6 +56,35 @@ async def get_db_session():
         yield session
 
 
+# Helper function for WebSocket calls with API key
+async def ws_broadcast(message_type: str, data: dict, channel: str = None):
+    """Send broadcast message to WebSocket server with API key"""
+    try:
+        async with httpx.AsyncClient() as client:
+            await client.post(
+                f"{settings.WS_SERVICE_URL}/broadcast",
+                json={"type": message_type, "data": data, "channel": channel},
+                headers={"X-Service-API-Key": settings.WS_SERVICE_API_KEY},
+                timeout=5.0
+            )
+    except Exception as e:
+        logger.warning(f"WebSocket broadcast failed: {e}")
+
+
+async def ws_notify(user_id: int, message_type: str, data: dict):
+    """Send notification to specific user via WebSocket with API key"""
+    try:
+        async with httpx.AsyncClient() as client:
+            await client.post(
+                f"{settings.WS_SERVICE_URL}/notify",
+                json={"user_id": user_id, "type": message_type, "data": data},
+                headers={"X-Service-API-Key": settings.WS_SERVICE_API_KEY},
+                timeout=5.0
+            )
+    except Exception as e:
+        logger.warning(f"WebSocket notify failed: {e}")
+
+
 # Note: get_current_user, require_employer, require_worker now imported from shared.auth_guard
 
 
@@ -215,18 +244,7 @@ async def refund_expired_job(
                     logger.info(f"Job {job_id} refunded due to expiration")
                     
                     # Broadcast
-                    try:
-                        async with httpx.AsyncClient() as client:
-                            await client.post(
-                                f"{settings.WS_SERVICE_URL}/broadcast",
-                                json={
-                                    "type": "job_refunded",
-                                    "data": {"job_id": job.id, "reason": "expired"}
-                                },
-                                timeout=5.0
-                            )
-                    except Exception as e:
-                        logger.warning(f"WebSocket broadcast failed: {e}")
+                    await ws_broadcast("job_refunded", {"job_id": job.id, "reason": "expired"})
                     
                     await session.refresh(job)
                 else:
@@ -327,23 +345,12 @@ async def create_job(
             await session.commit()
         
         # Broadcast to WebSocket
-        try:
-            async with httpx.AsyncClient() as client:
-                await client.post(
-                    f"{settings.WS_SERVICE_URL}/broadcast",
-                    json={
-                        "type": "job_created",
-                        "data": {
-                            "job_id": new_job.id,
-                            "title": new_job.title,
-                            "pay_amount_usd": float(new_job.pay_amount_usd),
-                            "job_type": new_job.job_type
-                        }
-                    },
-                    timeout=5.0
-                )
-        except Exception as e:
-            logger.warning(f"WebSocket broadcast failed: {e}")
+        await ws_broadcast("job_created", {
+            "job_id": new_job.id,
+            "title": new_job.title,
+            "pay_amount_usd": float(new_job.pay_amount_usd),
+            "job_type": new_job.job_type
+        })
         
         # Refresh the job object to reattach it to the session
         await session.refresh(new_job)
@@ -695,18 +702,7 @@ async def accept_job(
         await session.refresh(job)
         
         # Broadcast
-        try:
-            async with httpx.AsyncClient() as client:
-                await client.post(
-                    f"{settings.WS_SERVICE_URL}/broadcast",
-                    json={
-                        "type": "job_accepted",
-                        "data": {"job_id": job.id, "worker_id": job.worker_id}
-                    },
-                    timeout=5.0
-                )
-        except Exception as e:
-            logger.warning(f"WebSocket broadcast failed: {e}")
+        await ws_broadcast("job_accepted", {"job_id": job.id, "worker_id": job.worker_id})
         
         logger.info(f"Job {job_id} accepted by user {user.get('sub')}")
         
@@ -721,6 +717,84 @@ async def accept_job(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to accept job"
+        )
+
+
+@app.post("/jobs/{job_id}/withdraw", response_model=JobResponse)
+async def withdraw_from_job(
+    job_id: int,
+    user: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session)
+):
+    """Worker withdraws from an accepted job"""
+    try:
+        if user.get("user_type") != "worker":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only workers can withdraw from jobs"
+            )
+        
+        result = await session.execute(select(Job).where(Job.id == job_id))
+        job = result.scalar_one_or_none()
+        
+        if not job:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+        
+        if job.worker_id != int(user.get("sub")):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not assigned to this job"
+            )
+        
+        if job.status != JobStatus.IN_PROGRESS.value:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Can only withdraw from jobs in progress"
+            )
+        
+        # Reset job to open status
+        job.worker_id = None
+        job.status = JobStatus.OPEN.value
+        job.accepted_at = None
+        job.deadline = None
+        
+        # Reset checklist to uncompleted state
+        if job.checklist:
+            job.checklist = [
+                {**item, "completed": False} for item in job.checklist
+            ]
+            attributes.flag_modified(job, "checklist")
+        
+        await session.commit()
+        await session.refresh(job)
+        
+        # Notify employer via WebSocket
+        await ws_notify(job.employer_id, "job_withdrawn", {
+            "job_id": job.id,
+            "job_title": job.title,
+            "worker_username": user.get("username")
+        })
+        
+        # Broadcast to all users that job is available again
+        await ws_broadcast("job_reopened", {
+            "job_id": job.id,
+            "title": job.title,
+            "pay_amount_usd": float(job.pay_amount_usd)
+        })
+        
+        logger.info(f"Worker {user.get('sub')} withdrew from job {job_id}")
+        
+        # Enrich with usernames
+        return await enrich_job_with_usernames(job)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Withdraw from job failed: {e}")
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to withdraw from job"
         )
 
 
@@ -834,18 +908,7 @@ async def complete_job(
                     logger.info(f"Job {job_id} completed, payment released")
                     
                     # Broadcast
-                    try:
-                        async with httpx.AsyncClient() as client:
-                            await client.post(
-                                f"{settings.WS_SERVICE_URL}/broadcast",
-                                json={
-                                    "type": "job_completed",
-                                    "data": {"job_id": job.id, "payment_released": True}
-                                },
-                                timeout=5.0
-                            )
-                    except Exception as e:
-                        logger.warning(f"WebSocket broadcast failed: {e}")
+                    await ws_broadcast("job_completed", {"job_id": job.id, "payment_released": True})
                     
                     # Refresh the job object to reattach it to the session
                     await session.refresh(job)

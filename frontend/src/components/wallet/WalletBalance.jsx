@@ -18,7 +18,6 @@ const WalletBalance = () => {
 
     try {
       const data = await paymentService.getBalance(account)
-      console.log('Balance data received:', data)
       setBalance(data)
     } catch (err) {
       console.error('Failed to fetch balance:', err)

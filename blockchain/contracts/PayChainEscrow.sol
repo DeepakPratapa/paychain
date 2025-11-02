@@ -17,6 +17,12 @@ contract PayChainEscrow {
     uint256 public totalEscrowLocked;
     uint256 public totalFeesCollected;
     
+    // Security constraints
+    uint256 public constant MAX_TIME_LIMIT = 720 hours;  // 30 days maximum
+    uint256 public constant MIN_TIME_LIMIT = 1 hours;    // 1 hour minimum
+    uint256 public constant MAX_JOB_VALUE = 1000 ether;  // Max 1000 ETH per job
+    uint256 public constant MIN_JOB_VALUE = 0.001 ether; // Min 0.001 ETH per job
+    
     struct Job {
         uint256 jobId;
         address payable employer;
@@ -107,9 +113,13 @@ contract PayChainEscrow {
         payable 
         whenNotPaused
     {
-        require(msg.value > 0, "Must send ETH");
+        // Input validation
+        require(msg.value >= MIN_JOB_VALUE, "Job value too low");
+        require(msg.value <= MAX_JOB_VALUE, "Job value too high");
         require(jobs[_jobId].employer == address(0), "Job ID already exists");
-        require(_timeLimitHours > 0, "Time limit must be positive");
+        require(_timeLimitHours >= MIN_TIME_LIMIT / 1 hours, "Time limit too short");
+        require(_timeLimitHours <= MAX_TIME_LIMIT / 1 hours, "Time limit too long");
+        require(_jobId > 0 && _jobId < type(uint256).max, "Invalid job ID");
         
         // Calculate amounts
         uint256 platformFee = (msg.value * platformFeePercent) / 100;

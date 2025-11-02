@@ -3,7 +3,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { jobService } from '../services/jobService'
 import { useAuth } from '../contexts/AuthContext'
 import { useWebSocket } from '../contexts/WebSocketContext'
-import { useEffect } from 'react'
 import { Clock, DollarSign, User, CheckCircle, AlertCircle, Pencil, Trash2, ClipboardList } from 'lucide-react'
 import toast from 'react-hot-toast'
 import CurrencyDisplay from '../components/common/CurrencyDisplay'
@@ -13,7 +12,9 @@ const JobDetailsPage = () => {
   const navigate = useNavigate()
   const { user } = useAuth()
   const queryClient = useQueryClient()
-  const { isConnected, subscribe, unsubscribe, on } = useWebSocket()
+  
+  // Get WebSocket connection status (notifications handled globally in App.jsx)
+  const { isConnected } = useWebSocket()
 
   const { data: job, isLoading } = useQuery({
     queryKey: ['job', id],
@@ -22,59 +23,8 @@ const JobDetailsPage = () => {
     refetchOnWindowFocus: false, // Don't refetch when window regains focus
   })
 
-  // WebSocket real-time updates
-  useEffect(() => {
-    if (!isConnected || !id) return
-
-    // Subscribe to job-specific channel
-    subscribe(`job:${id}`)
-
-    // Handle job updates
-    const unsubscribeJobUpdate = on('job_updated', (data) => {
-      if (data.job_id === parseInt(id)) {
-        console.log('🔄 Job updated via WebSocket:', data)
-        queryClient.invalidateQueries(['job', id])
-        toast.success('Job updated!', { icon: '🔄' })
-      }
-    })
-
-    // Handle job status changes
-    const unsubscribeStatusChange = on('job_status_changed', (data) => {
-      if (data.job_id === parseInt(id)) {
-        console.log('📊 Job status changed:', data.new_status)
-        queryClient.invalidateQueries(['job', id])
-        queryClient.invalidateQueries(['my-jobs'])
-        
-        const statusMessages = {
-          accepted: 'Job has been accepted by a worker',
-          in_progress: 'Work is now in progress',
-          completed: 'Job has been completed!',
-          cancelled: 'Job has been cancelled',
-        }
-        
-        if (statusMessages[data.new_status]) {
-          toast.success(statusMessages[data.new_status], { icon: '📊' })
-        }
-      }
-    })
-
-    // Handle payment confirmations
-    const unsubscribePayment = on('payment_confirmed', (data) => {
-      if (data.job_id === parseInt(id)) {
-        console.log('💰 Payment confirmed:', data)
-        queryClient.invalidateQueries(['job', id])
-        toast.success('Payment confirmed on blockchain!', { icon: '💰' })
-      }
-    })
-
-    // Cleanup
-    return () => {
-      unsubscribe(`job:${id}`)
-      unsubscribeJobUpdate()
-      unsubscribeStatusChange()
-      unsubscribePayment()
-    }
-  }, [isConnected, id, subscribe, unsubscribe, on, queryClient])
+  // Note: WebSocket notifications are handled globally by useWebSocketNotifications hook
+  // Real-time updates for job_created, job_accepted, job_completed, job_refunded
 
   const acceptMutation = useMutation({
     mutationFn: () => jobService.acceptJob(id),
@@ -85,6 +35,19 @@ const JobDetailsPage = () => {
     },
     onError: (error) => {
       toast.error(error.response?.data?.detail || 'Failed to accept job')
+    },
+  })
+
+  const withdrawMutation = useMutation({
+    mutationFn: () => jobService.withdrawFromJob(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['job', id])
+      queryClient.invalidateQueries(['my-jobs'])
+      queryClient.invalidateQueries(['jobs'])
+      toast.success('You have withdrawn from this job. The employer has been notified.')
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.detail || 'Failed to withdraw from job')
     },
   })
 
@@ -119,6 +82,16 @@ const JobDetailsPage = () => {
     const confirmed = window.confirm('Are you sure you want to cancel this job? This action cannot be undone.')
     if (confirmed) {
       deleteMutation.mutate()
+    }
+  }
+
+  const handleWithdrawFromJob = () => {
+    if (withdrawMutation.isPending) return
+    const confirmed = window.confirm(
+      'Are you sure you want to withdraw from this job? The job will be reopened for other workers, and the employer will be notified.'
+    )
+    if (confirmed) {
+      withdrawMutation.mutate()
     }
   }
 
@@ -200,7 +173,9 @@ const JobDetailsPage = () => {
   const isEmployer = user?.id === job.employer_id
   const isWorker = user?.id === job.worker_id
   const isJobOpen = job.status === 'open'
+  const isJobInProgress = job.status === 'in_progress'
   const canAccept = user?.user_type === 'worker' && isJobOpen && !isEmployer
+  const canWithdraw = isWorker && isJobInProgress
   const canUpdateChecklist = isWorker && job.status === 'in_progress'
   const totalTasks = Array.isArray(job.checklist) ? job.checklist.length : 0
   const completedTasks = Array.isArray(job.checklist)
@@ -405,6 +380,16 @@ const JobDetailsPage = () => {
                 }`}
               >
                 {completeMutation.isPending ? 'Submitting…' : 'Submit Work & Release Payment'}
+              </button>
+            )}
+
+            {canWithdraw && (
+              <button
+                onClick={handleWithdrawFromJob}
+                disabled={withdrawMutation.isPending}
+                className="w-full px-6 py-3 bg-amber-600 text-white rounded-lg font-semibold hover:bg-amber-700 transition-colors disabled:opacity-50"
+              >
+                {withdrawMutation.isPending ? 'Withdrawing…' : 'Withdraw from Job'}
               </button>
             )}
 

@@ -111,6 +111,7 @@ services:
       - USER_SERVICE_URL=http://user-service:8000
       - PAYMENT_SERVICE_URL=http://payment-service:8000
       - WEBSOCKET_SERVER_URL=http://websocket-server:8000
+      - WS_SERVICE_API_KEY=${WS_SERVICE_API_KEY:-dev-ws-service-key-change-in-production}
     restart: unless-stopped
 
   # ============================================
@@ -154,6 +155,8 @@ services:
       - backend-net
     env_file:
       - .env
+    environment:
+      - WS_SERVICE_API_KEY=${WS_SERVICE_API_KEY:-dev-ws-service-key-change-in-production}
     restart: unless-stopped
 
   # ============================================

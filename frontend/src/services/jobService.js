@@ -29,6 +29,11 @@ export const jobService = {
     return response.data
   },
 
+  async withdrawFromJob(jobId) {
+    const response = await api.post(`/jobs/${jobId}/withdraw`)
+    return response.data
+  },
+
   async updateChecklist(jobId, itemId, completed) {
     const response = await api.put(`/jobs/${jobId}/checklist`, {
       item_id: itemId,

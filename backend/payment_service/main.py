@@ -9,7 +9,7 @@ import logging
 
 from shared.config import get_settings
 from shared.database import get_database
-from shared.auth_guard import get_current_user
+from shared.auth_guard import get_current_user, verify_service_key
 from blockchain_client import BlockchainClient
 
 logging.basicConfig(level=logging.INFO)
@@ -67,13 +67,8 @@ async def shutdown():
     logger.info("👋 Payment Service stopped")
 
 
-async def verify_service_key(x_service_api_key: str = Header(...)):
-    """Verify service-to-service API key"""
-    if x_service_api_key != settings.PAYMENT_SERVICE_API_KEY:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid service API key"
-        )
+# Service API key verification now handled by Central Auth Guard
+# No need for custom verify_service_key function
 
 
 @app.get("/health")
@@ -89,9 +84,9 @@ async def health_check():
 @app.post("/escrow/lock")
 async def lock_funds(
     request: LockFundsRequest,
-    api_key: str = Depends(verify_service_key)
+    api_key: bool = Depends(verify_service_key)
 ):
-    """Lock funds in smart contract escrow"""
+    """Lock funds in smart contract escrow (service-to-service endpoint)"""
     try:
         if not blockchain.is_connected():
             raise HTTPException(
@@ -135,9 +130,9 @@ async def lock_funds(
 @app.post("/escrow/release")
 async def release_payment(
     request: ReleasePaymentRequest,
-    api_key: str = Depends(verify_service_key)
+    api_key: bool = Depends(verify_service_key)
 ):
-    """Release payment to worker"""
+    """Release payment from escrow to worker (service-to-service endpoint)"""
     try:
         if not blockchain.is_connected():
             raise HTTPException(
@@ -178,11 +173,11 @@ async def release_payment(
 
 
 @app.post("/escrow/refund")
-async def refund_job(
+async def refund_escrow(
     request: RefundRequest,
-    api_key: str = Depends(verify_service_key)
+    api_key: bool = Depends(verify_service_key)
 ):
-    """Refund employer for expired job"""
+    """Refund escrowed funds to employer (service-to-service endpoint)"""
     try:
         if not blockchain.is_connected():
             raise HTTPException(

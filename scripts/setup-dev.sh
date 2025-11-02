@@ -27,12 +27,16 @@ PAYMENT_SERVICE_KEY=$(openssl rand -hex 16)
 # Create .env from template
 cp .env.example .env
 
+# Ganache test private key (account #0 - DO NOT USE IN PRODUCTION)
+GANACHE_PRIVATE_KEY="0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+
 # Replace placeholders using | delimiter to avoid issues with special characters
 sed -i "s|CHANGE_ME_POSTGRES_PASSWORD|$POSTGRES_PASSWORD|g" .env
 sed -i "s|CHANGE_ME_JWT_SECRET|$JWT_SECRET|g" .env
 sed -i "s|CHANGE_ME_USER_SERVICE_KEY|$USER_SERVICE_KEY|g" .env
 sed -i "s|CHANGE_ME_JOB_SERVICE_KEY|$JOB_SERVICE_KEY|g" .env
 sed -i "s|CHANGE_ME_PAYMENT_SERVICE_KEY|$PAYMENT_SERVICE_KEY|g" .env
+sed -i "s|CHANGE_ME_USE_SEPARATE_PRODUCTION_WALLET|$GANACHE_PRIVATE_KEY|g" .env
 
 echo "✅ Secrets generated and saved to .env"
 

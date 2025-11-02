@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
+import secrets
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -12,7 +13,7 @@ def create_access_token(
     expires_delta: Optional[timedelta] = None,
     algorithm: str = "HS256"
 ) -> str:
-    """Create JWT access token"""
+    """Create JWT access token with unique JTI for blacklisting"""
     to_encode = data.copy()
     
     if expires_delta:
@@ -23,7 +24,8 @@ def create_access_token(
     to_encode.update({
         "exp": expire,
         "iat": datetime.utcnow(),
-        "type": "access"
+        "type": "access",
+        "jti": secrets.token_hex(16)  # Unique token ID for revocation
     })
     
     encoded_jwt = jwt.encode(to_encode, secret_key, algorithm=algorithm)
@@ -36,7 +38,7 @@ def create_refresh_token(
     expires_delta: Optional[timedelta] = None,
     algorithm: str = "HS256"
 ) -> str:
-    """Create JWT refresh token"""
+    """Create JWT refresh token with unique JTI for blacklisting"""
     to_encode = data.copy()
     
     if expires_delta:
@@ -47,7 +49,8 @@ def create_refresh_token(
     to_encode.update({
         "exp": expire,
         "iat": datetime.utcnow(),
-        "type": "refresh"
+        "type": "refresh",
+        "jti": secrets.token_hex(16)  # Unique token ID for revocation
     })
     
     encoded_jwt = jwt.encode(to_encode, secret_key, algorithm=algorithm)

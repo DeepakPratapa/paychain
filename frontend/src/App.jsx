@@ -4,6 +4,7 @@ import { WalletProvider } from './contexts/WalletContext'
 import { DevModeProvider } from './contexts/DevModeContext'
 import { WebSocketProvider } from './contexts/WebSocketContext'
 import ProtectedRoute from './components/ProtectedRoute'
+import WebSocketNotifications from './components/WebSocketNotifications'
 import HomePage from './pages/HomePage'
 import DashboardPage from './pages/DashboardPage'
 import BrowseJobsPage from './pages/BrowseJobsPage'
@@ -19,6 +20,8 @@ function App() {
       <AuthProvider>
         <WebSocketProvider>
           <DevModeProvider>
+            {/* Global WebSocket notification handler */}
+            <WebSocketNotifications />
             <div className="min-h-screen bg-gray-50">
               <Navbar />
               <Routes>

@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { jobService } from '../services/jobService'
+import { useWebSocket } from '../contexts/WebSocketContext'
 import JobList from '../components/job/JobList'
-import { Search } from 'lucide-react'
+import { Search, Wifi, WifiOff } from 'lucide-react'
 
 const BrowseJobsPage = () => {
+  const { isConnected } = useWebSocket()
   const [filters, setFilters] = useState({
     status: 'open',  // Always filter to open jobs only
     search: '',
@@ -45,8 +47,22 @@ const BrowseJobsPage = () => {
           <h1 className="text-4xl font-bold bg-gradient-to-r from-primary-600 to-purple-600 bg-clip-text text-transparent mb-3">
             Browse Available Jobs
           </h1>
-          <p className="text-lg text-gray-600">
-            Find your next opportunity and start earning 💼
+          <p className="text-lg text-gray-600 flex items-center justify-center gap-2">
+            Find your next opportunity • {total || 0} jobs available
+            {/* WebSocket Connection Indicator */}
+            <span className="inline-flex items-center gap-1 text-sm ml-2">
+              {isConnected ? (
+                <>
+                  <Wifi size={16} className="text-green-600" />
+                  <span className="text-green-600">Live</span>
+                </>
+              ) : (
+                <>
+                  <WifiOff size={16} className="text-gray-400" />
+                  <span className="text-gray-400">Offline</span>
+                </>
+              )}
+            </span>
           </p>
         </div>
 

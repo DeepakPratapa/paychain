@@ -1,26 +1,31 @@
 """
 Centralized JWT Authentication Guard for Microservices
 Provides consistent authentication and authorization across all services
+Supports both JWT tokens for user requests and API keys for service-to-service communication
 """
 
 from fastapi import HTTPException, status, Header, Depends
 from typing import Optional, List
 from .auth import decode_token
 from .config import get_settings
+from .token_blacklist import get_token_blacklist
+from datetime import datetime
 import logging
 
 logger = logging.getLogger(__name__)
 
 
 class JWTAuthGuard:
-    """Centralized JWT authentication guard"""
+    """Centralized JWT authentication guard with token revocation support"""
     
     def __init__(self):
         self.settings = get_settings()
+        self.blacklist = get_token_blacklist(self.settings.REDIS_URL)
     
     async def verify_token(self, authorization: str = Header(...)) -> dict:
         """
         Verify JWT token and return payload.
+        Checks token blacklist for revoked tokens.
         Raises HTTPException if invalid.
         """
         try:
@@ -55,6 +60,29 @@ class JWTAuthGuard:
                     detail="Invalid token type. Access token required",
                     headers={"WWW-Authenticate": "Bearer"},
                 )
+            
+            # Check if token is blacklisted
+            token_jti = payload.get("jti")
+            if token_jti:
+                is_revoked = await self.blacklist.is_token_revoked(token_jti)
+                if is_revoked:
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="Token has been revoked",
+                        headers={"WWW-Authenticate": "Bearer"},
+                    )
+            
+            # Check if all user tokens were revoked
+            user_id = int(payload.get("sub"))
+            revoke_time = await self.blacklist.get_user_revocation_time(user_id)
+            if revoke_time:
+                token_issued_at = datetime.fromtimestamp(payload.get("iat", 0))
+                if token_issued_at < revoke_time:
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="Token has been revoked",
+                        headers={"WWW-Authenticate": "Bearer"},
+                    )
             
             return payload
             
@@ -138,6 +166,49 @@ class JWTAuthGuard:
             
             return payload
         return _verify
+    
+    async def verify_service_api_key(self, x_service_api_key: str = Header(...), service_name: str = None) -> bool:
+        """
+        Verify service-to-service API key.
+        Used for internal microservice communication.
+        
+        Args:
+            x_service_api_key: API key from request header
+            service_name: Name of the calling service (optional, for logging)
+        
+        Returns:
+            True if valid
+            
+        Raises:
+            HTTPException: If API key is invalid
+        """
+        # Get the expected API keys from settings
+        valid_keys = []
+        
+        if self.settings.PAYMENT_SERVICE_API_KEY:
+            valid_keys.append(self.settings.PAYMENT_SERVICE_API_KEY)
+        if self.settings.WS_SERVICE_API_KEY:
+            valid_keys.append(self.settings.WS_SERVICE_API_KEY)
+        
+        # Check if provided key matches any valid service key
+        if x_service_api_key not in valid_keys:
+            logger.warning(f"Invalid service API key attempt from {service_name or 'unknown'}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid service API key"
+            )
+        
+        logger.debug(f"Valid service API key from {service_name or 'service'}")
+        return True
+    
+    def require_service_key(self):
+        """
+        Dependency to require valid service-to-service API key.
+        Returns True if valid, raises HTTPException otherwise.
+        """
+        async def _verify(x_service_api_key: str = Header(...)) -> bool:
+            return await self.verify_service_api_key(x_service_api_key)
+        return _verify
 
 
 # Global instance
@@ -163,3 +234,8 @@ async def require_employer(authorization: str = Header(...)) -> dict:
 async def require_worker(authorization: str = Header(...)) -> dict:
     """Require worker user type"""
     return await auth_guard.require_worker()(authorization)
+
+
+async def verify_service_key(x_service_api_key: str = Header(...)) -> bool:
+    """Verify service-to-service API key (centralized)"""
+    return await auth_guard.verify_service_api_key(x_service_api_key)

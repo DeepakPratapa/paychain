@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     USER_SERVICE_API_KEY: Optional[str] = None
     JOB_SERVICE_API_KEY: Optional[str] = None
     PAYMENT_SERVICE_API_KEY: Optional[str] = None
+    WS_SERVICE_API_KEY: Optional[str] = "dev-ws-service-key-change-in-production"
     
     # Service URLs
     USER_SERVICE_URL: Optional[str] = None

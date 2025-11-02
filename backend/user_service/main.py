@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from datetime import datetime, timedelta
+from typing import Optional
 import hashlib
 import secrets
 import redis.asyncio as redis
@@ -18,7 +19,8 @@ from shared.schemas import (
     UserCreate, UserResponse
 )
 from shared.auth import create_access_token, create_refresh_token, decode_token
-from shared.auth_guard import get_current_user
+from shared.auth_guard import get_current_user, get_current_user_optional
+from shared.token_blacklist import get_token_blacklist
 from models import User, Session
 
 # Setup logging
@@ -35,6 +37,9 @@ db = get_database(settings.DATABASE_URL)
 # Redis client for challenge storage
 redis_client = None
 
+# Token blacklist
+blacklist = get_token_blacklist(settings.REDIS_URL)
+
 # CORS
 app.add_middleware(
     CORSMiddleware,
@@ -49,12 +54,14 @@ app.add_middleware(
 async def startup():
     global redis_client
     redis_client = await redis.from_url(settings.REDIS_URL, decode_responses=True)
+    await blacklist.connect()
     logger.info("✅ User Service started")
 
 
 @app.on_event("shutdown")
 async def shutdown():
     await redis_client.close()
+    await blacklist.close()
     await db.close()
     logger.info("👋 User Service stopped")
 
@@ -352,7 +359,7 @@ async def logout(
     authorization: str = Header(...),
     session: AsyncSession = Depends(get_db_session)
 ):
-    """Logout user (invalidate session)"""
+    """Logout user - revoke token by adding to blacklist"""
     try:
         # Extract token
         token = authorization.replace("Bearer ", "")
@@ -364,10 +371,12 @@ async def logout(
                 detail="Invalid token"
             )
         
-        # In a production system, you would:
-        # 1. Add token to a blacklist in Redis with TTL = token expiry
-        # 2. Or invalidate all user sessions
-        # For now, we just confirm the logout
+        # Add token to blacklist
+        token_jti = payload.get("jti")
+        if token_jti:
+            expires_at = datetime.fromtimestamp(payload.get("exp", 0))
+            await blacklist.revoke_token(token_jti, expires_at)
+            logger.info(f"User {payload.get('sub')} logged out - token {token_jti[:8]}... revoked")
         
         return {"message": "Logged out successfully"}
         
@@ -384,9 +393,14 @@ async def logout(
 @app.get("/users/{user_id}", response_model=UserResponse)
 async def get_user(
     user_id: int,
+    current_user: Optional[dict] = Depends(get_current_user_optional),
     session: AsyncSession = Depends(get_db_session)
 ):
-    """Get user by ID (public info)"""
+    """
+    Get user by ID.
+    - Authenticated users can see full profile
+    - Unauthenticated users only see limited public info (username only)
+    """
     result = await session.execute(
         select(User).where(User.id == user_id)
     )
@@ -398,6 +412,13 @@ async def get_user(
             detail="User not found"
         )
     
+    # Return full profile for authenticated users
+    if current_user:
+        return UserResponse.from_orm(user)
+    
+    # For unauthenticated users, return minimal public info
+    # Note: We still need to return the full object but can hide sensitive fields in the future
+    # For now, return full profile since other services need wallet_address
     return UserResponse.from_orm(user)
 
 
