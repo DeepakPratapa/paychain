@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status, Header
+from fastapi import FastAPI, Depends, HTTPException, status, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -36,6 +36,17 @@ app.add_middleware(
 )
 
 
+# Security headers middleware
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
+
+
 # Request/Response Models
 class LockFundsRequest(BaseModel):
     job_id: int
@@ -55,6 +66,11 @@ class RefundRequest(BaseModel):
 
 @app.on_event("startup")
 async def startup():
+    # Validate configuration
+    if not settings.JWT_SECRET_KEY:
+        logger.error("❌ JWT_SECRET_KEY is not set!")
+        raise ValueError("JWT_SECRET_KEY must be set in environment variables")
+    
     if blockchain.is_connected():
         logger.info("✅ Payment Service started - Blockchain connected")
     else:

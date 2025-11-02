@@ -11,3 +11,4 @@ httpx==0.25.2
 redis==5.0.1
 eth-account==0.10.0
 web3==6.11.3
+slowapi==0.1.9

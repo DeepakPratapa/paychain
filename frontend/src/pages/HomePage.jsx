@@ -100,8 +100,11 @@ const HomePage = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           {/* Welcome Header */}
           <div className="mb-10">
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-primary-600 to-purple-600 bg-clip-text text-transparent mb-2">
-              Welcome back, {user.username}! 👋
+            <h1 className="text-4xl font-bold mb-2 pb-1 leading-tight">
+              <span className="bg-gradient-to-r from-primary-600 to-purple-600 bg-clip-text text-transparent">
+                Welcome back, {user.username}!
+              </span>{' '}
+              <span>👋</span>
             </h1>
             <p className="text-lg text-gray-600">
               Manage your jobs and find talented workers
@@ -200,8 +203,11 @@ const HomePage = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           {/* Welcome Header */}
           <div className="mb-10">
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-primary-600 to-purple-600 bg-clip-text text-transparent mb-2">
-              Welcome back, {user.username}! 🚀
+            <h1 className="text-4xl font-bold mb-2 pb-1 leading-tight">
+              <span className="bg-gradient-to-r from-primary-600 to-purple-600 bg-clip-text text-transparent">
+                Welcome back, {user.username}!
+              </span>{' '}
+              <span>🚀</span>
             </h1>
             <p className="text-lg text-gray-600">
               Find new opportunities and grow your earnings
@@ -420,7 +426,7 @@ const HomePage = () => {
           </p>
           <button
             onClick={handleGetStarted}
-            className="px-8 py-3 bg-white text-primary-600 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
+            className="px-8 py-3 bg-white text-primary-600 rounded-lg font-semibold hover:bg-gray-100 transition-colors text-lg shadow-lg hover:shadow-xl"
           >
             Get Started
           </button>

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status, Header
+from fastapi import FastAPI, Depends, HTTPException, status, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -10,6 +10,9 @@ import redis.asyncio as redis
 from eth_account.messages import encode_defunct
 from web3 import Web3
 import logging
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from shared.config import get_settings
 from shared.database import get_database
@@ -34,6 +37,11 @@ app = FastAPI(title="PayChain User Service", version="1.0.0")
 settings = get_settings()
 db = get_database(settings.DATABASE_URL)
 
+# Rate limiter
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 # Redis client for challenge storage
 redis_client = None
 
@@ -50,12 +58,32 @@ app.add_middleware(
 )
 
 
+# Security headers middleware
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
+
+
 @app.on_event("startup")
 async def startup():
     global redis_client
+    
+    # Validate JWT secret key
+    if not settings.JWT_SECRET_KEY:
+        logger.error("❌ JWT_SECRET_KEY is not set!")
+        raise ValueError("JWT_SECRET_KEY must be set in environment variables")
+    
+    if len(settings.JWT_SECRET_KEY) < 32:
+        logger.warning("⚠️  JWT_SECRET_KEY is too short (minimum 32 characters recommended)")
+    
     redis_client = await redis.from_url(settings.REDIS_URL, decode_responses=True)
     await blacklist.connect()
-    logger.info("✅ User Service started")
+    logger.info("✅ User Service started with security enhancements")
 
 
 @app.on_event("shutdown")
@@ -78,7 +106,8 @@ async def health_check():
 
 
 @app.post("/auth/challenge", response_model=ChallengeResponse)
-async def get_challenge(request: ChallengeRequest):
+@limiter.limit("10/minute")
+async def get_challenge(request: Request, challenge_req: ChallengeRequest):
     """Generate signature challenge for MetaMask authentication"""
     try:
         # Generate nonce
@@ -88,16 +117,18 @@ async def get_challenge(request: ChallengeRequest):
         # Create challenge message
         challenge = f"""Sign this to login to PayChain
 
-Wallet: {request.wallet_address}
+Wallet: {challenge_req.wallet_address}
 Nonce: {nonce}
 Timestamp: {timestamp}"""
         
         # Store challenge in Redis with 5-minute expiration
         await redis_client.setex(
-            f"challenge:{request.wallet_address}",
+            f"challenge:{challenge_req.wallet_address}",
             300,  # 5 minutes
             f"{nonce}:{timestamp}"
         )
+        
+        logger.info(f"Challenge generated for wallet: {challenge_req.wallet_address[:10]}...")
         
         return ChallengeResponse(
             challenge=challenge,
@@ -112,15 +143,18 @@ Timestamp: {timestamp}"""
 
 
 @app.post("/auth/verify", response_model=TokenResponse)
+@limiter.limit("5/minute")
 async def verify_signature(
-    request: VerifyRequest,
+    request: Request,
+    verify_req: VerifyRequest,
     session: AsyncSession = Depends(get_db_session)
 ):
     """Verify MetaMask signature and issue JWT tokens"""
     try:
         # Retrieve stored challenge
-        stored = await redis_client.get(f"challenge:{request.wallet_address}")
+        stored = await redis_client.get(f"challenge:{verify_req.wallet_address}")
         if not stored:
+            logger.warning(f"Login failed - challenge not found: {verify_req.wallet_address[:10]}...")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Challenge expired or not found"
@@ -130,11 +164,12 @@ async def verify_signature(
         nonce, timestamp = stored.split(":")
         expected_message = f"""Sign this to login to PayChain
 
-Wallet: {request.wallet_address}
+Wallet: {verify_req.wallet_address}
 Nonce: {nonce}
 Timestamp: {timestamp}"""
         
-        if request.message != expected_message:
+        if verify_req.message != expected_message:
+            logger.warning(f"Login failed - message mismatch: {verify_req.wallet_address[:10]}...")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Message mismatch"
@@ -142,20 +177,21 @@ Timestamp: {timestamp}"""
         
         # Verify signature using Web3
         w3 = Web3()
-        message = encode_defunct(text=request.message)
-        recovered_address = w3.eth.account.recover_message(message, signature=request.signature)
+        message = encode_defunct(text=verify_req.message)
+        recovered_address = w3.eth.account.recover_message(message, signature=verify_req.signature)
         
-        if recovered_address.lower() != request.wallet_address.lower():
+        if recovered_address.lower() != verify_req.wallet_address.lower():
+            logger.warning(f"Login failed - invalid signature: {verify_req.wallet_address[:10]}...")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid signature"
             )
         
         # Delete used challenge
-        await redis_client.delete(f"challenge:{request.wallet_address}")
+        await redis_client.delete(f"challenge:{verify_req.wallet_address}")
         
         # Normalize wallet address to lowercase for consistent matching
-        normalized_wallet = request.wallet_address.lower()
+        normalized_wallet = verify_req.wallet_address.lower()
         
         # Check if user exists
         wallet_hash = hashlib.sha256(normalized_wallet.encode()).hexdigest()
@@ -166,6 +202,7 @@ Timestamp: {timestamp}"""
         
         if not user:
             # New user needs to complete signup
+            logger.info(f"New user needs signup: {verify_req.wallet_address[:10]}...")
             return TokenResponse(
                 access_token="",
                 refresh_token="",
@@ -196,6 +233,8 @@ Timestamp: {timestamp}"""
             secret_key=settings.JWT_SECRET_KEY,
             expires_delta=timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
         )
+        
+        logger.info(f"✅ User logged in successfully: {user.username} ({user.user_type})")
         
         return TokenResponse(
             access_token=access_token,
@@ -298,16 +337,19 @@ async def get_me(
 
 
 @app.post("/auth/refresh", response_model=TokenResponse)
+@limiter.limit("10/minute")
 async def refresh_access_token(
-    request: RefreshRequest,
+    request: Request,
+    refresh_req: RefreshRequest,
     session: AsyncSession = Depends(get_db_session)
 ):
     """Refresh access token using refresh token"""
     try:
         # Decode refresh token
-        payload = decode_token(request.refresh_token, settings.JWT_SECRET_KEY)
+        payload = decode_token(refresh_req.refresh_token, settings.JWT_SECRET_KEY)
         
         if not payload or payload.get("type") != "refresh":
+            logger.warning("Token refresh failed - invalid refresh token")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid refresh token"
@@ -322,6 +364,7 @@ async def refresh_access_token(
         user = result.scalar_one_or_none()
         
         if not user or not user.is_active:
+            logger.warning(f"Token refresh failed - user {user_id} not found or inactive")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="User not found or inactive"
@@ -383,10 +426,11 @@ async def logout(
         
         # Add token to blacklist
         token_jti = payload.get("jti")
+        user_id = payload.get("sub")
         if token_jti:
             expires_at = datetime.fromtimestamp(payload.get("exp", 0))
             await blacklist.revoke_token(token_jti, expires_at)
-            logger.info(f"User {payload.get('sub')} logged out - token {token_jti[:8]}... revoked")
+            logger.info(f"🔒 User {user_id} logged out - token revoked")
         
         return {"message": "Logged out successfully"}
         

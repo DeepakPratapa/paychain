@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status, Header
+from fastapi import FastAPI, Depends, HTTPException, status, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func
@@ -40,9 +40,28 @@ app.add_middleware(
 )
 
 
+# Security headers middleware
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
+
+
 @app.on_event("startup")
 async def startup():
-    logger.info("✅ Job Service started")
+    # Validate JWT secret key
+    if not settings.JWT_SECRET_KEY:
+        logger.error("❌ JWT_SECRET_KEY is not set!")
+        raise ValueError("JWT_SECRET_KEY must be set in environment variables")
+    
+    if len(settings.JWT_SECRET_KEY) < 32:
+        logger.warning("⚠️  JWT_SECRET_KEY is too short (minimum 32 characters recommended)")
+    
+    logger.info("✅ Job Service started with security enhancements")
 
 
 @app.on_event("shutdown")

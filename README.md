@@ -21,7 +21,7 @@ This project showcases expertise in:
 - ✅ **Docker** - Multi-container orchestration
 - ✅ **Real-time** - WebSocket notifications
 - ✅ **Blockchain** - Ethereum smart contracts
-- ✅ **Security** - JWT authentication, input validation
+- ✅ **Security** - JWT authentication, rate limiting, security headers
 
 ---
 
@@ -38,6 +38,7 @@ cd paychain
 **Documentation:**
 - 📖 [Deployment Guide](DEPLOYMENT.md) - Full setup instructions
 - 🔧 [Environment Setup](ENV_SETUP.md) - Configuration options
+- 🔒 [Security Improvements](SECURITY_IMPROVEMENTS.md) - **NEW** Security features
 - 📚 [API Documentation](docs/API.md) - Complete API reference
 - 🏛️ [Architecture](docs/Architecture.md) - System design
 

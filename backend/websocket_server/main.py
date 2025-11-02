@@ -1,4 +1,4 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, status, Header, Depends
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, status, Header, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Any, Optional
@@ -34,6 +34,17 @@ app.add_middleware(
 )
 
 
+# Security headers middleware
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
+
+
 class BroadcastMessage(BaseModel):
     type: str
     data: Optional[Any] = None
@@ -48,7 +59,7 @@ class NotifyMessage(BaseModel):
 
 @app.on_event("startup")
 async def startup():
-    logger.info("✅ WebSocket Server started with Central Auth Guard")
+    logger.info("✅ WebSocket Server started with security enhancements")
 
 
 # Service API key verification now handled by Central Auth Guard
