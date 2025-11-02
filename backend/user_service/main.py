@@ -181,7 +181,12 @@ Timestamp: {timestamp}"""
         
         # Generate tokens
         access_token = create_access_token(
-            data={"sub": str(user.id), "wallet": user.wallet_address, "user_type": user.user_type},
+            data={
+                "sub": str(user.id),
+                "wallet": user.wallet_address,
+                "user_type": user.user_type,
+                "username": user.username
+            },
             secret_key=settings.JWT_SECRET_KEY,
             expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         )
@@ -324,7 +329,12 @@ async def refresh_access_token(
         
         # Generate new access token
         access_token = create_access_token(
-            data={"sub": str(user.id), "wallet": user.wallet_address, "user_type": user.user_type},
+            data={
+                "sub": str(user.id),
+                "wallet": user.wallet_address,
+                "user_type": user.user_type,
+                "username": user.username
+            },
             secret_key=settings.JWT_SECRET_KEY,
             expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         )
