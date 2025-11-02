@@ -37,26 +37,18 @@ export const useWebSocketNotifications = () => {
       // Only show toast to workers
       if (user?.user_type === 'worker') {
         toast.success(
-          (t) => (
-            <div className="flex items-start gap-3">
-              <div className="text-2xl">💼</div>
-              <div>
-                <div className="font-semibold text-white">New Job Posted!</div>
-                <div className="text-sm text-indigo-100 mt-1">{data.title}</div>
-                <div className="text-xs text-indigo-200 font-medium mt-1">
-                  ${data.pay_amount_usd?.toLocaleString()} • {data.job_type}
-                </div>
-              </div>
-            </div>
-          ),
+          `💼 ${data.title} • $${data.pay_amount_usd?.toLocaleString()}`,
           {
-            id: `job-created-${data.id}`, // Prevent duplicates
+            id: `job-created-${data.id}`,
             duration: 5000,
             style: {
-              background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
-              border: '1px solid #818cf8',
-              padding: '12px 16px',
-              boxShadow: '0 4px 12px rgba(99, 102, 241, 0.3)',
+              background: '#6366f1',
+              color: '#ffffff',
+              padding: '14px 16px',
+              borderRadius: '12px',
+              fontSize: '14px',
+              fontWeight: '500',
+              boxShadow: '0 8px 24px rgba(99, 102, 241, 0.4)',
             },
           }
         )
@@ -76,28 +68,18 @@ export const useWebSocketNotifications = () => {
       if (user?.user_type === 'employer') {
         const workerName = data.worker_username || 'A worker'
         toast.success(
-          (t) => (
-            <div className="flex items-start gap-3">
-              <div className="text-2xl">🎉</div>
-              <div>
-                <div className="font-semibold text-white">Job Accepted!</div>
-                <div className="text-sm text-purple-100 mt-1">
-                  {workerName} has accepted your job
-                </div>
-                <div className="text-xs text-purple-200 font-medium mt-1">
-                  Job ID: #{data.job_id}
-                </div>
-              </div>
-            </div>
-          ),
+          `🎉 ${workerName} has accepted your job`,
           {
             id: `job-accepted-${data.job_id}`,
             duration: 6000,
             style: {
-              background: 'linear-gradient(135deg, #a855f7 0%, #9333ea 100%)',
-              border: '1px solid #c084fc',
-              padding: '12px 16px',
-              boxShadow: '0 4px 12px rgba(168, 85, 247, 0.3)',
+              background: '#a855f7',
+              color: '#ffffff',
+              padding: '14px 16px',
+              borderRadius: '12px',
+              fontSize: '14px',
+              fontWeight: '500',
+              boxShadow: '0 8px 24px rgba(168, 85, 247, 0.4)',
             },
           }
         )
@@ -116,57 +98,39 @@ export const useWebSocketNotifications = () => {
 
       if (user?.user_type === 'employer') {
         const message = data.payment_released
-          ? 'Payment has been released to the worker'
-          : 'Please review the completed work'
+          ? '🎊 Payment released to worker'
+          : '🎊 Job completed - please review'
 
         toast.success(
-          (t) => (
-            <div className="flex items-start gap-3">
-              <div className="text-2xl">🎊</div>
-              <div>
-                <div className="font-semibold text-white">Job Completed!</div>
-                <div className="text-sm text-cyan-100 mt-1">{message}</div>
-                <div className="text-xs text-cyan-200 font-medium mt-1">
-                  Job ID: #{data.job_id}
-                </div>
-              </div>
-            </div>
-          ),
+          message,
           {
             id: `job-completed-employer-${data.job_id}`,
             duration: 7000,
             style: {
-              background: 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)',
-              border: '1px solid #22d3ee',
-              padding: '12px 16px',
-              boxShadow: '0 4px 12px rgba(6, 182, 212, 0.3)',
+              background: '#06b6d4',
+              color: '#ffffff',
+              padding: '14px 16px',
+              borderRadius: '12px',
+              fontSize: '14px',
+              fontWeight: '500',
+              boxShadow: '0 8px 24px rgba(6, 182, 212, 0.4)',
             },
           }
         )
       } else if (user?.user_type === 'worker') {
         toast.success(
-          (t) => (
-            <div className="flex items-start gap-3">
-              <div className="text-2xl">💰</div>
-              <div>
-                <div className="font-semibold text-white">Payment Released!</div>
-                <div className="text-sm text-yellow-100 mt-1">
-                  Your payment has been processed
-                </div>
-                <div className="text-xs text-yellow-200 font-medium mt-1">
-                  Check your wallet for funds
-                </div>
-              </div>
-            </div>
-          ),
+          '💰 Payment released - check your wallet!',
           {
             id: `job-completed-worker-${data.job_id}`,
             duration: 7000,
             style: {
-              background: 'linear-gradient(135deg, #eab308 0%, #ca8a04 100%)',
-              border: '1px solid #facc15',
-              padding: '12px 16px',
-              boxShadow: '0 4px 12px rgba(234, 179, 8, 0.3)',
+              background: '#eab308',
+              color: '#ffffff',
+              padding: '14px 16px',
+              borderRadius: '12px',
+              fontSize: '14px',
+              fontWeight: '500',
+              boxShadow: '0 8px 24px rgba(234, 179, 8, 0.4)',
             },
           }
         )
@@ -186,28 +150,18 @@ export const useWebSocketNotifications = () => {
 
       if (user?.user_type === 'employer') {
         toast(
-          (t) => (
-            <div className="flex items-start gap-3">
-              <div className="text-2xl">🔄</div>
-              <div>
-                <div className="font-semibold text-white">Job Refunded</div>
-                <div className="text-sm text-blue-50 mt-1">
-                  Your funds have been returned
-                </div>
-                <div className="text-xs text-blue-100 font-medium mt-1">
-                  Reason: {data.reason || 'Job expired'}
-                </div>
-              </div>
-            </div>
-          ),
+          `🔄 Job refunded - ${data.reason || 'Job expired'}`,
           {
             id: `job-refunded-${data.job_id}`,
             duration: 6000,
             style: {
-              background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-              border: '1px solid #60a5fa',
-              padding: '12px 16px',
-              boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)',
+              background: '#3b82f6',
+              color: '#ffffff',
+              padding: '14px 16px',
+              borderRadius: '12px',
+              fontSize: '14px',
+              fontWeight: '500',
+              boxShadow: '0 8px 24px rgba(59, 130, 246, 0.4)',
             },
           }
         )
@@ -229,31 +183,18 @@ export const useWebSocketNotifications = () => {
       if (user?.user_type === 'employer') {
         const workerName = data.worker_username || 'A worker'
         toast(
-          (t) => (
-            <div className="flex items-start gap-3">
-              <div className="text-2xl">⚠️</div>
-              <div>
-                <div className="font-semibold text-white">Worker Withdrew</div>
-                <div className="text-sm text-amber-50 mt-1">
-                  {workerName} has withdrawn from
-                </div>
-                <div className="text-sm text-white font-medium mt-0.5">
-                  "{data.job_title}"
-                </div>
-                <div className="text-xs text-amber-100 mt-1">
-                  Job is now available for other workers
-                </div>
-              </div>
-            </div>
-          ),
+          `⚠️ ${workerName} withdrew from "${data.job_title}"`,
           {
             id: `job-withdrawn-${data.job_id}`,
             duration: 7000,
             style: {
-              background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
-              border: '1px solid #fbbf24',
-              padding: '12px 16px',
-              boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)',
+              background: '#f59e0b',
+              color: '#ffffff',
+              padding: '14px 16px',
+              borderRadius: '12px',
+              fontSize: '14px',
+              fontWeight: '500',
+              boxShadow: '0 8px 24px rgba(245, 158, 11, 0.4)',
             },
           }
         )
@@ -273,26 +214,18 @@ export const useWebSocketNotifications = () => {
       // Notify all workers that a job is available again
       if (user?.user_type === 'worker') {
         toast(
-          (t) => (
-            <div className="flex items-start gap-3">
-              <div className="text-2xl">🔔</div>
-              <div>
-                <div className="font-semibold text-white">Job Available Again!</div>
-                <div className="text-sm text-blue-50 mt-1">{data.title}</div>
-                <div className="text-xs text-blue-100 font-medium mt-1">
-                  ${data.pay_amount_usd?.toLocaleString()}
-                </div>
-              </div>
-            </div>
-          ),
+          `🔔 Job available again: ${data.title} • $${data.pay_amount_usd?.toLocaleString()}`,
           {
             id: `job-reopened-${data.id}`,
             duration: 5000,
             style: {
-              background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-              border: '1px solid #60a5fa',
-              padding: '12px 16px',
-              boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)',
+              background: '#3b82f6',
+              color: '#ffffff',
+              padding: '14px 16px',
+              borderRadius: '12px',
+              fontSize: '14px',
+              fontWeight: '500',
+              boxShadow: '0 8px 24px rgba(59, 130, 246, 0.4)',
             },
           }
         )
@@ -308,31 +241,23 @@ export const useWebSocketNotifications = () => {
     const handlePaymentConfirmed = (data) => {
       if (!isActive) return
 
+      const message = data.amount 
+        ? `✅ Payment confirmed - $${data.amount.toLocaleString()}`
+        : '✅ Payment confirmed'
+
       toast.success(
-        (t) => (
-          <div className="flex items-start gap-3">
-            <div className="text-2xl">✅</div>
-            <div>
-              <div className="font-semibold text-white">Payment Confirmed</div>
-              <div className="text-sm text-teal-100 mt-1">
-                Transaction completed successfully
-              </div>
-              {data.amount && (
-                <div className="text-xs text-teal-200 font-medium mt-1">
-                  Amount: ${data.amount.toLocaleString()}
-                </div>
-              )}
-            </div>
-          </div>
-        ),
+        message,
         {
           id: `payment-confirmed-${data.job_id || data.transaction_id || Date.now()}`,
           duration: 5000,
           style: {
-            background: 'linear-gradient(135deg, #14b8a6 0%, #0d9488 100%)',
-            border: '1px solid #2dd4bf',
-            padding: '12px 16px',
-            boxShadow: '0 4px 12px rgba(20, 184, 166, 0.3)',
+            background: '#14b8a6',
+            color: '#ffffff',
+            padding: '14px 16px',
+            borderRadius: '12px',
+            fontSize: '14px',
+            fontWeight: '500',
+            boxShadow: '0 8px 24px rgba(20, 184, 166, 0.4)',
           },
         }
       )

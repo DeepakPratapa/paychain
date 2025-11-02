@@ -701,8 +701,12 @@ async def accept_job(
         await session.commit()
         await session.refresh(job)
         
-        # Broadcast
-        await ws_broadcast("job_accepted", {"job_id": job.id, "worker_id": job.worker_id})
+        # Broadcast with worker username
+        await ws_broadcast("job_accepted", {
+            "job_id": job.id, 
+            "worker_id": job.worker_id,
+            "worker_username": user.get("username")
+        })
         
         logger.info(f"Job {job_id} accepted by user {user.get('sub')}")
         
