@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 from typing import Optional, List, Any
 from datetime import datetime
 from enum import Enum
@@ -41,7 +41,7 @@ class TransactionStatus(str, Enum):
 # User Schemas
 class UserBase(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
-    email: str
+    email: EmailStr
     wallet_address: str = Field(..., min_length=42, max_length=42)
     user_type: UserType
 

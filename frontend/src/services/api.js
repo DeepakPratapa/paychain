@@ -1,5 +1,6 @@
 import axios from 'axios'
 import config from '../config'
+import { addCSRFHeader } from '../utils/csrf'
 
 const api = axios.create({
   baseURL: config.API_URL,
@@ -73,6 +74,11 @@ const refreshAccessToken = async () => {
 api.interceptors.request.use(
   async (config) => {
     const token = localStorage.getItem('access_token')
+    
+    // Add CSRF token to all state-changing requests
+    if (['post', 'put', 'patch', 'delete'].includes(config.method?.toLowerCase())) {
+      config.headers = addCSRFHeader(config.headers)
+    }
     
     if (token) {
       // Check if token is expiring soon and refresh proactively

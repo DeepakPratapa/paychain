@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect } from 'react'
 import { useWallet } from './WalletContext'
 import { authService } from '../services/authService'
 import toast from 'react-hot-toast'
+import { clearCSRFToken } from '../utils/csrf'
 
 const AuthContext = createContext()
 
@@ -116,6 +117,7 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     authService.logout()
     setUser(null)
+    clearCSRFToken() // Clear CSRF token on logout
     toast.success('Logged out successfully')
   }
 

@@ -12,6 +12,12 @@ const RegistrationModal = ({ isOpen, onClose, onSubmit, walletAddress }) => {
 
   if (!isOpen) return null
 
+  // Email validation regex (RFC 5322 compliant simplified version)
+  const validateEmail = (email) => {
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
+    return emailRegex.test(email)
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     
@@ -20,8 +26,8 @@ const RegistrationModal = ({ isOpen, onClose, onSubmit, walletAddress }) => {
       toast.error('Username must be at least 3 characters')
       return
     }
-    if (!formData.email.includes('@')) {
-      toast.error('Please enter a valid email')
+    if (!validateEmail(formData.email)) {
+      toast.error('Please enter a valid email address')
       return
     }
 

@@ -5,6 +5,7 @@ import { jobService } from '../services/jobService'
 import { useAuth } from '../contexts/AuthContext'
 import { Plus, X } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { sanitizeUserInput } from '../utils/sanitizer'
 
 const CreateJobPage = () => {
   const navigate = useNavigate()
@@ -43,9 +44,11 @@ const CreateJobPage = () => {
   const handleAddChecklistItem = () => {
     if (!newChecklistItem.trim()) return
     
+    const sanitizedItem = sanitizeUserInput(newChecklistItem.trim())
+    
     setFormData(prev => ({
       ...prev,
-      checklist: [...prev.checklist, newChecklistItem.trim()],
+      checklist: [...prev.checklist, sanitizedItem],
     }))
     setNewChecklistItem('')
   }
@@ -79,8 +82,8 @@ const CreateJobPage = () => {
     }
 
     createMutation.mutate({
-      title: formData.title,
-      description: formData.description,
+      title: sanitizeUserInput(formData.title),
+      description: sanitizeUserInput(formData.description),
       job_type: formData.job_type,
       pay_amount_usd: parseFloat(formData.price),
       time_limit_hours: parseInt(formData.time_limit_hours),
