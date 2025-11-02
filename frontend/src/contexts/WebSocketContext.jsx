@@ -171,19 +171,16 @@ export const WebSocketProvider = ({ children }) => {
     
     // Check if this exact handler is already registered
     if (handlers.has(handler)) {
-      console.warn(`Handler for '${messageType}' already registered, skipping duplicate`)
       return () => {} // Return no-op unsubscribe
     }
     
     handlers.add(handler)
-    console.log(`✅ Registered handler for '${messageType}', total: ${handlers.size}`)
 
     // Return unsubscribe function
     return () => {
       const handlers = messageHandlers.current.get(messageType)
       if (handlers) {
         handlers.delete(handler)
-        console.log(`🗑️ Unregistered handler for '${messageType}', remaining: ${handlers.size}`)
         if (handlers.size === 0) {
           messageHandlers.current.delete(messageType)
         }

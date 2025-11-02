@@ -11,7 +11,6 @@ const PlatformStats = () => {
     const fetchStats = async () => {
       try {
         const data = await paymentService.getEscrowStats()
-        console.log('Platform stats received:', data)
         setStats(data)
         setError(null)
       } catch (err) {

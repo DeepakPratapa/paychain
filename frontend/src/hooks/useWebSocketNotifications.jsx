@@ -6,7 +6,7 @@ import { useAuth } from '../contexts/AuthContext'
 
 /**
  * Custom hook to handle WebSocket real-time notifications
- * Properly handles cleanup to work with React.StrictMode
+ * Properly handles cleanup and prevents duplicate toasts
  */
 export const useWebSocketNotifications = () => {
   const { isConnected, subscribe, on } = useWebSocket()
@@ -19,11 +19,9 @@ export const useWebSocketNotifications = () => {
 
     // Prevent duplicate handler registration
     if (hasRegisteredHandlers.current) {
-      console.log('⚠️ Handlers already registered, skipping')
       return
     }
 
-    console.log('✅ Registering WebSocket notification handlers for user:', user.id)
     hasRegisteredHandlers.current = true
 
     // Track if this effect is still active to prevent stale updates
@@ -52,6 +50,7 @@ export const useWebSocketNotifications = () => {
             </div>
           ),
           {
+            id: `job-created-${data.id}`, // Prevent duplicates
             duration: 5000,
             style: {
               background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
@@ -75,6 +74,7 @@ export const useWebSocketNotifications = () => {
 
       // Only notify if this is the employer's job
       if (user?.user_type === 'employer') {
+        const workerName = data.worker_username || 'A worker'
         toast.success(
           (t) => (
             <div className="flex items-start gap-3">
@@ -82,7 +82,7 @@ export const useWebSocketNotifications = () => {
               <div>
                 <div className="font-semibold text-white">Job Accepted!</div>
                 <div className="text-sm text-purple-100 mt-1">
-                  A worker has accepted your job
+                  {workerName} has accepted your job
                 </div>
                 <div className="text-xs text-purple-200 font-medium mt-1">
                   Job ID: #{data.job_id}
@@ -91,6 +91,7 @@ export const useWebSocketNotifications = () => {
             </div>
           ),
           {
+            id: `job-accepted-${data.job_id}`,
             duration: 6000,
             style: {
               background: 'linear-gradient(135deg, #a855f7 0%, #9333ea 100%)',
@@ -132,6 +133,7 @@ export const useWebSocketNotifications = () => {
             </div>
           ),
           {
+            id: `job-completed-employer-${data.job_id}`,
             duration: 7000,
             style: {
               background: 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)',
@@ -158,6 +160,7 @@ export const useWebSocketNotifications = () => {
             </div>
           ),
           {
+            id: `job-completed-worker-${data.job_id}`,
             duration: 7000,
             style: {
               background: 'linear-gradient(135deg, #eab308 0%, #ca8a04 100%)',
@@ -198,6 +201,7 @@ export const useWebSocketNotifications = () => {
             </div>
           ),
           {
+            id: `job-refunded-${data.job_id}`,
             duration: 6000,
             style: {
               background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
@@ -243,6 +247,7 @@ export const useWebSocketNotifications = () => {
             </div>
           ),
           {
+            id: `job-withdrawn-${data.job_id}`,
             duration: 7000,
             style: {
               background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
@@ -281,6 +286,7 @@ export const useWebSocketNotifications = () => {
             </div>
           ),
           {
+            id: `job-reopened-${data.id}`,
             duration: 5000,
             style: {
               background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
@@ -320,6 +326,7 @@ export const useWebSocketNotifications = () => {
           </div>
         ),
         {
+          id: `payment-confirmed-${data.job_id || data.transaction_id || Date.now()}`,
           duration: 5000,
           style: {
             background: 'linear-gradient(135deg, #14b8a6 0%, #0d9488 100%)',
@@ -348,7 +355,6 @@ export const useWebSocketNotifications = () => {
 
     // Cleanup function - properly unsubscribe all handlers
     return () => {
-      console.log('🧹 Cleaning up WebSocket notification handlers')
       isActive = false // Prevent any pending callbacks from executing
       hasRegisteredHandlers.current = false
       unsubscribers.forEach(unsubscribe => unsubscribe())
