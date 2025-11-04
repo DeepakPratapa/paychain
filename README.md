@@ -30,7 +30,7 @@ This project showcases expertise in:
 ```bash
 git clone https://github.com/DeepakPratapa/paychain.git
 cd paychain
-./scripts/setup-dev.sh && ./scripts/start-demo.sh
+./scripts/restart-server.sh
 ```
 
 **Access:** http://localhost

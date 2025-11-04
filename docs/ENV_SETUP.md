@@ -15,9 +15,7 @@ For local development and demo purposes:
 # Just clone and run - no .env files needed!
 git clone https://github.com/DeepakPratapa/paychain.git
 cd paychain
-./scripts/setup-dev.sh
-./scripts/start-demo.sh
-```
+./restart-server.sh
 
 The services use these defaults:
 - **Database**: `postgresql://paychain:paychain@postgres:5432/paychain`
