@@ -416,12 +416,79 @@ Release escrowed funds to worker (internal service-to-service call).
 
 **Response:**
 ```json
-{
   "transaction_hash": "0x...",
   "block_number": 12346,
   "amount_to_worker": "0.049",
   "platform_fee": "0.001"
 }
+```
+
+### POST /escrow/cancel
+
+Cancel job before worker assignment and refund employer (internal service-to-service call).
+
+**Headers:** `X-Service-API-Key: <api_key>`
+
+**Request:**
+```json
+{
+  "job_id": 1,
+  "employer_wallet": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+}
+```
+
+**Response:**
+```json
+{
+  "transaction_hash": "0x...",
+  "gas_used": 45000,
+  "status": "confirmed"
+}
+```
+
+**Requirements:**
+- Job must be locked in escrow
+- No worker assigned (worker == address(0))
+- Only employer can cancel
+- No deadline check (instant refund)
+
+**Use Case:**
+Employer changes mind before any worker accepts the job.
+
+---
+
+### POST /escrow/refund
+
+Refund expired job escrow to employer (internal service-to-service call).
+
+**Headers:** `X-Service-API-Key: <api_key>`
+
+**Request:**
+```json
+{
+  "job_id": 1
+}
+```
+
+**Response:**
+```json
+{
+  "transaction_hash": "0x...",
+  "block_number": 12347,
+  "refunded_amount": "0.05"
+}
+```
+
+**Requirements:**
+- Job must be locked in escrow
+- Deadline must have passed
+- Job not completed
+- Anyone can call (usually automated)
+
+**Use Case:**
+Worker accepted job but didn't complete by deadline. Employer gets full refund after deadline expires.
+
+---
 ```
 
 ### POST /escrow/refund

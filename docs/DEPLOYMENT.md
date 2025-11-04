@@ -409,11 +409,262 @@ For production deployment, you'll need to:
 
 ---
 
+## Viewing and Managing the Database
+
+### Access PostgreSQL Database
+
+**Option 1: Using Docker exec with psql**
+
+```bash
+# Connect to PostgreSQL container
+docker exec -it postgres psql -U postgres -d paychain_db
+
+# You're now in the PostgreSQL interactive terminal
+paychain_db=#
+```
+
+**Common psql commands:**
+
+```sql
+-- List all tables
+\dt
+
+-- View table structure
+\d users
+\d jobs
+
+-- View all users
+SELECT * FROM users;
+
+-- View all jobs
+SELECT id, title, status, payment_status, pay_amount_usd 
+FROM jobs 
+ORDER BY created_at DESC;
+
+-- View jobs with employer details
+SELECT j.id, j.title, u.username as employer, j.status, j.pay_amount_usd
+FROM jobs j
+JOIN users u ON j.employer_id = u.id;
+
+-- Count jobs by status
+SELECT status, COUNT(*) 
+FROM jobs 
+GROUP BY status;
+
+-- Exit psql
+\q
+```
+
+**Option 2: Using pgAdmin (GUI Tool)**
+
+```bash
+# Install pgAdmin (on your local machine)
+# Ubuntu/Debian
+sudo apt install pgadmin4
+
+# macOS
+brew install --cask pgadmin4
+
+# Windows
+# Download from https://www.pgadmin.org/download/
+```
+
+**Connect to database:**
+- Host: `localhost`
+- Port: `5432`
+- Database: `paychain_db`
+- Username: `postgres`
+- Password: (check your `.env` file for `POSTGRES_PASSWORD`)
+
+**Option 3: Using DBeaver (Universal Database Tool)**
+
+```bash
+# Download DBeaver Community Edition
+# https://dbeaver.io/download/
+
+# Connection details:
+# - Server Host: localhost
+# - Port: 5432
+# - Database: paychain_db
+# - Username: postgres
+# - Password: <from .env>
+```
+
+**Option 4: Using VS Code Extension**
+
+```bash
+# Install PostgreSQL extension in VS Code
+# Extension: "PostgreSQL" by Chris Kolkman
+
+# Add connection:
+# - Host: localhost
+# - Port: 5432
+# - Database: paychain_db
+# - Username: postgres
+# - Password: <from .env>
+```
+
+### Useful Database Queries
+
+**Check recent jobs:**
+```sql
+SELECT 
+    j.id,
+    j.title,
+    j.status,
+    j.payment_status,
+    e.username as employer,
+    w.username as worker,
+    j.pay_amount_usd,
+    j.created_at
+FROM jobs j
+LEFT JOIN users e ON j.employer_id = e.id
+LEFT JOIN users w ON j.worker_id = w.id
+ORDER BY j.created_at DESC
+LIMIT 10;
+```
+
+**Check user wallets:**
+```sql
+SELECT 
+    id,
+    username,
+    user_type,
+    wallet_address,
+    created_at
+FROM users
+ORDER BY created_at DESC;
+```
+
+**Check job checklists (JSONB data):**
+```sql
+SELECT 
+    id,
+    title,
+    checklist,
+    jsonb_array_length(checklist) as total_items,
+    (
+        SELECT COUNT(*)
+        FROM jsonb_array_elements(checklist) as item
+        WHERE (item->>'completed')::boolean = true
+    ) as completed_items
+FROM jobs
+WHERE checklist IS NOT NULL;
+```
+
+**Check payment statuses:**
+```sql
+SELECT 
+    payment_status,
+    COUNT(*) as count,
+    SUM(pay_amount_usd) as total_usd
+FROM jobs
+GROUP BY payment_status
+ORDER BY count DESC;
+```
+
+### Database Backup and Restore
+
+**Backup database:**
+```bash
+# Backup to SQL file
+docker exec postgres pg_dump -U postgres paychain_db > backup.sql
+
+# Backup to compressed file
+docker exec postgres pg_dump -U postgres paychain_db | gzip > backup.sql.gz
+```
+
+**Restore database:**
+```bash
+# Restore from SQL file
+docker exec -i postgres psql -U postgres paychain_db < backup.sql
+
+# Restore from compressed file
+gunzip < backup.sql.gz | docker exec -i postgres psql -U postgres paychain_db
+```
+
+**Reset database (dangerous!):**
+```bash
+# Stop all services
+docker-compose down
+
+# Remove database volume
+docker volume rm paychain_postgres-data
+
+# Restart (will recreate database with init.sql and seed.sql)
+docker-compose up -d
+```
+
+### Viewing Redis Cache
+
+**Access Redis CLI:**
+
+```bash
+# Connect to Redis container
+docker exec -it redis redis-cli
+
+# Common commands
+127.0.0.1:6379>
+```
+
+**Redis commands:**
+
+```bash
+# View all keys
+KEYS *
+
+# View blacklisted tokens
+KEYS blacklist:*
+
+# Check if token is blacklisted
+GET blacklist:<token_jti>
+
+# View user revocation time
+GET user_revoke:1
+
+# View all keys with pattern
+KEYS user_revoke:*
+
+# Get key value
+GET <key_name>
+
+# Check key TTL (time to live)
+TTL blacklist:<token_jti>
+
+# Delete a key
+DEL <key_name>
+
+# Clear all data (DANGEROUS!)
+FLUSHALL
+
+# Exit Redis CLI
+exit
+```
+
+### Monitoring Database Connections
+
+**Check active connections:**
+```bash
+docker exec -it postgres psql -U postgres -d paychain_db -c "SELECT pid, usename, application_name, client_addr, state FROM pg_stat_activity WHERE datname = 'paychain_db';"
+```
+
+**Check database size:**
+```bash
+docker exec -it postgres psql -U postgres -d paychain_db -c "SELECT pg_size_pretty(pg_database_size('paychain_db'));"
+```
+
+**Check table sizes:**
+```bash
+docker exec -it postgres psql -U postgres -d paychain_db -c "SELECT relname, pg_size_pretty(pg_total_relation_size(relid)) AS size FROM pg_catalog.pg_statio_user_tables ORDER BY pg_total_relation_size(relid) DESC;"
+```
+
+---
+
 ## Support & Documentation
 
 - **README**: [README.md](./README.md)
 - **API Documentation**: [docs/API.md](./docs/API.md)
-<!-- - **Architecture**: [docs/Architecture.md](./docs/Architecture.md) -->
+- **Master Architecture**: [docs/MASTER_ARCHITECTURE.md](./docs/MASTER_ARCHITECTURE.md)
 - **Security**: [docs/SECURITY_README.md](./docs/SECURITY_README.md)
 
 ---
@@ -443,4 +694,4 @@ docker-compose down -v
 
 **You're all set!** 🎉
 
-The application should now be running and accessible at http://localhost
+The application should now be running and accessible at http://localhost:5173
