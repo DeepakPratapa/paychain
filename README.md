@@ -36,9 +36,9 @@ cd paychain
 **Access:** http://localhost
 
 **Documentation:**
-- 📖 [Deployment Guide](DEPLOYMENT.md) - Full setup instructions
-- 🔧 [Environment Setup](ENV_SETUP.md) - Configuration options
-- 🔒 [Security Improvements](SECURITY_IMPROVEMENTS.md) - **NEW** Security features
+- 📖 [Deployment Guide](docs/DEPLOYMENT.md) - Full setup instructions
+- 🔧 [Environment Setup](docs/ENV_SETUP.md) - Configuration options
+- 🔒 [Security Improvements](docs/SECURITY_IMPROVEMENTS.md) - **NEW** Security features
 - 📚 [API Documentation](docs/API.md) - Complete API reference
 <!-- - 🏛️ [Architecture](docs/Architecture.md) - System design -->
 
@@ -139,6 +139,8 @@ paychain/
 ├── docs/                    # Documentation
 │   ├── API.md              # API reference
 │   └── Architecture.md      # System design
+
+    
 │
 ├── scripts/                 # Automation scripts
 │   ├── setup-dev.sh        # Initial setup

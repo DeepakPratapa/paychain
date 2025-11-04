@@ -413,7 +413,7 @@ For production deployment, you'll need to:
 
 - **README**: [README.md](./README.md)
 - **API Documentation**: [docs/API.md](./docs/API.md)
-- **Architecture**: [docs/Architecture.md](./docs/Architecture.md)
+<!-- - **Architecture**: [docs/Architecture.md](./docs/Architecture.md) -->
 - **Security**: [docs/SECURITY_README.md](./docs/SECURITY_README.md)
 
 ---
