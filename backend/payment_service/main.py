@@ -237,6 +237,47 @@ async def refund_escrow(
         )
 
 
+@app.post("/escrow/cancel")
+async def cancel_job_escrow(
+    request: RefundRequest,
+    employer_wallet: str,
+    api_key: bool = Depends(verify_service_key)
+):
+    """Cancel job and refund employer before deadline (service-to-service endpoint)"""
+    try:
+        if not blockchain.is_connected():
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Blockchain service unavailable"
+            )
+        
+        # Cancel job in smart contract
+        result = blockchain.cancel_job(request.job_id, employer_wallet)
+        
+        if not result:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to cancel job"
+            )
+        
+        logger.info(f"Job {request.job_id} cancelled: {result['transaction_hash']}")
+        
+        return {
+            "transaction_hash": result['transaction_hash'],
+            "gas_used": result['gas_used'],
+            "status": result['status']
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Cancel job failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+
 @app.get("/balance/{wallet_address}")
 async def get_balance(
     wallet_address: str,

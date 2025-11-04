@@ -1,47 +1,32 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useWallet } from '../../contexts/WalletContext'
 import { paymentService } from '../../services/paymentService'
 import { Wallet, RefreshCw, ArrowLeftRight } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
 
 const WalletBalance = () => {
   const { account } = useWallet()
-  const [balance, setBalance] = useState(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
   const [showEth, setShowEth] = useState(true)
 
-  const fetchBalance = async () => {
-    if (!account) return
-
-    setLoading(true)
-    setError(null)
-
-    try {
-      const data = await paymentService.getBalance(account)
-      setBalance(data)
-    } catch (err) {
-      console.error('Failed to fetch balance:', err)
-      setError('Failed to load balance')
-      setBalance(null)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    fetchBalance()
-    
-    // Refresh balance every 30 seconds
-    const interval = setInterval(fetchBalance, 30000)
-    
-    return () => clearInterval(interval)
-  }, [account])
+  // Use React Query for balance so WebSocket can invalidate it
+  const { data: balance, isLoading: loading, error, refetch } = useQuery({
+    queryKey: ['wallet-balance', account],
+    queryFn: () => paymentService.getBalance(account),
+    enabled: !!account,
+    refetchInterval: 30000, // Refresh every 30 seconds as fallback
+    staleTime: 10000, // Consider data stale after 10 seconds
+  })
 
   if (!account) return null
 
   const handleToggleCurrency = (e) => {
     e.stopPropagation()
     setShowEth(!showEth)
+  }
+
+  const handleRefresh = (e) => {
+    e.stopPropagation()
+    refetch()
   }
 
   return (
@@ -55,7 +40,7 @@ const WalletBalance = () => {
         </div>
       ) : error ? (
         <div className="text-sm text-red-600">
-          {error}
+          Failed to load balance
         </div>
       ) : balance ? (
         <div className="flex items-center gap-2">
@@ -82,7 +67,7 @@ const WalletBalance = () => {
             <ArrowLeftRight className="w-3 h-3 text-primary-600 group-hover:text-primary-700 transition-colors" />
           </button>
           <button
-            onClick={fetchBalance}
+            onClick={handleRefresh}
             disabled={loading}
             className="p-1 hover:bg-primary-100 rounded transition-colors disabled:opacity-50"
             title="Refresh balance"

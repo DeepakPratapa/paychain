@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from typing import Optional, List
 import httpx
 import logging
+import time
 
 from shared.config import get_settings
 from shared.database import get_database
@@ -364,6 +365,7 @@ async def create_job(
                 if response.status_code == 200:
                     result = response.json()
                     new_job.contract_address = result.get("contract_address")
+                    new_job.contract_job_id = new_job.id  # Blockchain uses same ID as database
                     new_job.payment_status = PaymentStatus.LOCKED.value
                     await session.commit()
                     logger.info(f"Funds locked for job {new_job.id}: {result.get('transaction_hash')}")
@@ -469,7 +471,7 @@ async def delete_job(
     user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session)
 ):
-    """Cancel an open job (employer only)"""
+    """Cancel an open job and refund locked funds (employer only)"""
     try:
         result = await session.execute(select(Job).where(Job.id == job_id))
         job = result.scalar_one_or_none()
@@ -482,6 +484,45 @@ async def delete_job(
 
         if job.status != JobStatus.OPEN.value:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only open jobs can be deleted")
+
+        # Refund locked funds before cancelling
+        if job.payment_status == PaymentStatus.LOCKED.value and job.contract_job_id:
+            try:
+                async with httpx.AsyncClient() as client:
+                    # Use cancel endpoint for employer cancellation (before deadline)
+                    response = await client.post(
+                        f"{settings.PAYMENT_SERVICE_URL}/escrow/cancel",
+                        json={"job_id": job.contract_job_id},
+                        params={"employer_wallet": user.get("wallet")},
+                        headers={"X-Service-Api-Key": settings.JOB_SERVICE_API_KEY},
+                        timeout=30.0
+                    )
+                    
+                    if response.status_code == 200:
+                        result = response.json()
+                        if result.get('status') == 'confirmed':
+                            job.payment_status = PaymentStatus.REFUNDED.value
+                            logger.info(f"Job {job_id} refunded on cancellation: {result}")
+                            
+                            # Broadcast WebSocket notification
+                            try:
+                                await ws_broadcast("job_cancelled_refunded", {
+                                    "job_id": job.id,
+                                    "employer_id": job.employer_id,
+                                    "title": job.title,
+                                    "refund_amount_eth": str(job.pay_amount_eth + job.platform_fee_eth),
+                                    "reason": "cancelled_by_employer"
+                                })
+                            except Exception as ws_error:
+                                logger.error(f"WebSocket broadcast failed: {ws_error}")
+                        else:
+                            logger.error(f"Cancel job blockchain transaction failed for job {job_id}")
+                    else:
+                        logger.error(f"Cancel job failed for job {job_id}: {response.status_code} - {response.text}")
+                        
+            except Exception as refund_error:
+                logger.error(f"Cancel job error for job {job_id}: {refund_error}")
+                # Continue with cancellation even if refund fails
 
         job.status = JobStatus.CANCELLED.value
         await session.commit()
@@ -873,6 +914,22 @@ async def update_checklist(
         total = len(checklist)
         completed_count = sum(1 for item in checklist if item["completed"])
         progress = int((completed_count / total) * 100) if total > 0 else 0
+        
+        # Broadcast WebSocket update to employer for real-time progress monitoring
+        try:
+            await ws_broadcast("checklist_updated", {
+                "job_id": job.id,
+                "employer_id": job.employer_id,
+                "worker_id": job.worker_id,
+                "item_id": request.item_id,
+                "completed": request.completed,
+                "progress_percent": progress,
+                "checklist": checklist,
+                "timestamp": int(time.time())
+            })
+            logger.info(f"Checklist updated for job {job_id}: item {request.item_id} = {request.completed}, progress: {progress}%")
+        except Exception as ws_error:
+            logger.error(f"WebSocket broadcast failed for checklist update: {ws_error}")
         
         return {"checklist": checklist, "progress_percent": progress}
         

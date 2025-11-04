@@ -37,7 +37,7 @@ export const useWebSocketNotifications = () => {
       // Only show toast to workers
       if (user?.user_type === 'worker') {
         toast.success(
-          `💼 ${data.title} • $${data.pay_amount_usd?.toLocaleString()}`,
+          `🆕 New Job Available: ${data.title} • $${data.pay_amount_usd?.toLocaleString()}`,
           {
             id: `job-created-${data.id}`,
             duration: 5000,
@@ -56,6 +56,7 @@ export const useWebSocketNotifications = () => {
 
       if (isActive) {
         queryClient.invalidateQueries({ queryKey: ['jobs'] })
+        queryClient.invalidateQueries({ queryKey: ['open-jobs'] })
         queryClient.invalidateQueries({ queryKey: ['stats'] })
       }
     }
@@ -267,6 +268,72 @@ export const useWebSocketNotifications = () => {
       }
     }
 
+    // ==================== JOB CANCELLED REFUNDED ====================
+    const handleJobCancelledRefunded = (data) => {
+      if (!isActive) return
+
+      // Only notify employer who cancelled and received refund
+      if (user?.user_type === 'employer' && data.employer_id === parseInt(user.sub)) {
+        const amount = data.refund_amount_eth 
+          ? `${parseFloat(data.refund_amount_eth).toFixed(4)} ETH`
+          : ''
+        
+        toast.success(
+          `💰 Job cancelled - Refund received ${amount}`,
+          {
+            id: `job-cancelled-refunded-${data.job_id}`,
+            duration: 6000,
+            style: {
+              background: '#10b981',
+              color: '#ffffff',
+              padding: '14px 16px',
+              borderRadius: '12px',
+              fontSize: '14px',
+              fontWeight: '500',
+              boxShadow: '0 8px 24px rgba(16, 185, 129, 0.4)',
+            },
+          }
+        )
+      }
+
+      if (isActive) {
+        queryClient.invalidateQueries({ queryKey: ['job', data.job_id] })
+        queryClient.invalidateQueries({ queryKey: ['my-jobs'] })
+        queryClient.invalidateQueries({ queryKey: ['stats'] })
+        queryClient.invalidateQueries({ queryKey: ['wallet-balance'] })
+      }
+    }
+
+    // ==================== CHECKLIST UPDATED ====================
+    const handleChecklistUpdated = (data) => {
+      if (!isActive) return
+
+      // Update the job cache immediately for real-time UI updates
+      if (isActive && data.job_id) {
+        queryClient.invalidateQueries({ queryKey: ['job', data.job_id.toString()] })
+        
+        // Show subtle notification to employer
+        if (user?.user_type === 'employer' && data.employer_id === parseInt(user.sub)) {
+          toast(
+            `📋 Progress: ${data.progress_percent}% complete`,
+            {
+              id: `checklist-updated-${data.job_id}`,
+              duration: 3000,
+              style: {
+                background: '#8b5cf6',
+                color: '#ffffff',
+                padding: '12px 14px',
+                borderRadius: '10px',
+                fontSize: '13px',
+                fontWeight: '500',
+                boxShadow: '0 6px 20px rgba(139, 92, 246, 0.3)',
+              },
+            }
+          )
+        }
+      }
+    }
+
     // Register all handlers and store unsubscribe functions
     const unsubscribers = [
       on('job_created', handleJobCreated),
@@ -276,6 +343,8 @@ export const useWebSocketNotifications = () => {
       on('job_withdrawn', handleJobWithdrawn),
       on('job_reopened', handleJobReopened),
       on('payment_confirmed', handlePaymentConfirmed),
+      on('job_cancelled_refunded', handleJobCancelledRefunded),
+      on('checklist_updated', handleChecklistUpdated),
     ]
 
     // Cleanup function - properly unsubscribe all handlers

@@ -217,6 +217,35 @@ contract PayChainEscrow {
     }
     
     /**
+     * @dev Cancel job and refund employer (before deadline, only if no worker assigned)
+     * @param _jobId Job identifier
+     */
+    function cancelJob(uint256 _jobId) 
+        external 
+        jobExists(_jobId) 
+        whenNotPaused
+    {
+        Job storage job = jobs[_jobId];
+        
+        require(msg.sender == job.employer, "Only employer can cancel");
+        require(job.isLocked, "Job is not locked");
+        require(!job.isCompleted, "Job already completed");
+        require(!job.isRefunded, "Job already refunded");
+        require(job.worker == address(0), "Cannot cancel after worker assigned");
+        
+        // Update state
+        job.isRefunded = true;
+        job.isLocked = false;
+        
+        totalEscrowLocked -= job.amount;
+        
+        // Refund full amount (including platform fee since job wasn't completed)
+        job.employer.transfer(job.amount);
+        
+        emit JobRefunded(_jobId, job.employer, job.amount);
+    }
+    
+    /**
      * @dev Platform owner withdraws collected fees
      */
     function withdrawPlatformFees() 

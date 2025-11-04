@@ -186,6 +186,46 @@ class BlockchainClient:
             logger.error(f"Refund failed: {e}")
             return None
     
+    def cancel_job(self, job_id: int, employer_address: str) -> Optional[dict]:
+        """Cancel job and refund employer (before deadline, before worker assigned)"""
+        try:
+            if not self.contract:
+                raise Exception("Contract not initialized")
+            
+            checksum_employer = Web3.to_checksum_address(employer_address)
+            employer_key = self._get_private_key_for_address(checksum_employer)
+            
+            if not employer_key:
+                raise Exception(f"Cannot derive private key for employer {checksum_employer}")
+            
+            # Build transaction
+            txn = self.contract.functions.cancelJob(
+                job_id
+            ).build_transaction({
+                'from': checksum_employer,
+                'gas': 200000,
+                'gasPrice': self.w3.eth.gas_price,
+                'nonce': self.w3.eth.get_transaction_count(checksum_employer)
+            })
+            
+            # Sign and send with employer's key
+            signed_txn = self.w3.eth.account.sign_transaction(txn, employer_key)
+            tx_hash = self.w3.eth.send_raw_transaction(signed_txn.rawTransaction)
+            
+            # Wait for receipt
+            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+            
+            return {
+                'transaction_hash': receipt['transactionHash'].hex(),
+                'block_number': receipt['blockNumber'],
+                'gas_used': receipt['gasUsed'],
+                'status': 'confirmed' if receipt['status'] == 1 else 'failed'
+            }
+            
+        except Exception as e:
+            logger.error(f"Cancel job failed: {e}")
+            return None
+    
     def get_job_balance(self, job_id: int) -> float:
         """Get locked balance for job"""
         try:
