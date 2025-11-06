@@ -77,7 +77,6 @@ cd paychain
 | **[API Documentation](docs/API.md)** | All REST endpoints with examples |
 | **[Deployment Guide](docs/DEPLOYMENT.md)** | Production deployment steps |
 | **[Security Guide](docs/SECURITY_IMPROVEMENTS.md)** | Security features and best practices |
-| **[Learning Guide](learning/00_INDEX.md)** | Step-by-step tutorials for understanding the codebase |
 
 ---
 
@@ -386,16 +385,7 @@ paychain/
 │   ├── API.md                 # API documentation
 │   ├── DEPLOYMENT.md          # Setup guide
 │   └── SECURITY_IMPROVEMENTS.md
-├── learning/                  # Step-by-step learning guide
-│   ├── 00_INDEX.md
-│   ├── 01_INTRODUCTION.md
-│   ├── 02_AUTHENTICATION.md   # Includes Auth Guard details
-│   ├── 03_DATABASE_DATAFLOW.md
-│   ├── 04_MICROSERVICES.md
-│   ├── 05_BLOCKCHAIN.md       # Includes cancelJob
-│   ├── 06_WEBSOCKETS.md
-│   ├── 07_FRONTEND_ARCHITECTURE.md
-│   └── 08_BUILDING_YOUR_NEXT_APP.md
+├             
 └── docker-compose.yml
 ```
 

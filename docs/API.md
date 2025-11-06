@@ -416,6 +416,7 @@ Release escrowed funds to worker (internal service-to-service call).
 
 **Response:**
 ```json
+{
   "transaction_hash": "0x...",
   "block_number": 12346,
   "amount_to_worker": "0.049",
